@@ -1,6 +1,12 @@
 plugins { id 'com.android.application' }
 android {
-    namespace 'com.wormgpt.exo'
+    namespace 'com.example.wlk0'
     compileSdk 35
-    defaultConfig { applicationId 'com.wormgpt.exo'; minSdk 23; targetSdk 28; versionCode 1; versionName '1.0' }
+    defaultConfig {
+        applicationId 'com.example.wlk0'
+        minSdk 23
+        targetSdk 28
+        versionCode 1
+        versionName '1.0'
+    }
 }
