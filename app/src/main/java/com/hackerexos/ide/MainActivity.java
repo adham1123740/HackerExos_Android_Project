@@ -28,6 +28,7 @@ public class MainActivity extends Activity {
 
         // Header (Toolbar)
         LinearLayout header = new LinearLayout(this);
+        header.setId(View.generateViewId());
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setPadding(30, 30, 30, 30);
         header.setBackgroundColor(Color.parseColor("#202c33"));
@@ -42,22 +43,9 @@ public class MainActivity extends Activity {
 
         root.addView(header, new RelativeLayout.LayoutParams(-1, -2));
 
-        // Chat Area
-        scrollView = new ScrollView(this);
-        RelativeLayout.LayoutParams scrollParams = new RelativeLayout.LayoutParams(-1, -2);
-        scrollParams.addRule(RelativeLayout.BELOW, header);
-        scrollParams.addRule(RelativeLayout.ABOVE, 500); // Placeholder for input
-        
-        chatContainer = new LinearLayout(this);
-        chatContainer.setOrientation(LinearLayout.VERTICAL);
-        chatContainer.setPadding(30, 30, 30, 30);
-        chatContainer.setGravity(Gravity.BOTTOM);
-        
-        scrollView.addView(chatContainer);
-        root.addView(scrollView, scrollParams);
-
-        // Input Area
+        // Input Area (Created first to get ID for ScrollView reference)
         LinearLayout inputLayout = new LinearLayout(this);
+        inputLayout.setId(View.generateViewId());
         inputLayout.setOrientation(LinearLayout.HORIZONTAL);
         inputLayout.setPadding(20, 20, 20, 20);
         inputLayout.setBackgroundColor(Color.parseColor("#202c33"));
@@ -82,6 +70,20 @@ public class MainActivity extends Activity {
         RelativeLayout.LayoutParams inputRootParams = new RelativeLayout.LayoutParams(-1, -2);
         inputRootParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
         root.addView(inputLayout, inputRootParams);
+
+        // Chat Area
+        scrollView = new ScrollView(this);
+        RelativeLayout.LayoutParams scrollParams = new RelativeLayout.LayoutParams(-1, -2);
+        scrollParams.addRule(RelativeLayout.BELOW, header.getId());
+        scrollParams.addRule(RelativeLayout.ABOVE, inputLayout.getId());
+        
+        chatContainer = new LinearLayout(this);
+        chatContainer.setOrientation(LinearLayout.VERTICAL);
+        chatContainer.setPadding(30, 30, 30, 30);
+        chatContainer.setGravity(Gravity.BOTTOM);
+        
+        scrollView.addView(chatContainer);
+        root.addView(scrollView, scrollParams);
 
         sendButton.setOnClickListener(v -> {
             String msg = messageInput.getText().toString().trim();
