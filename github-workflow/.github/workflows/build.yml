@@ -1,0 +1,136 @@
+name: HackerExos IDE - Build APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_name:
+        description: 'اسم التطبيق الذي سيظهر على الهاتف واسم ملف APK'
+        required: true
+        default: 'My Android App'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Locate Android project root
+        id: project
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=''
+          while IFS= read -r settings; do
+            candidate="$(dirname "$settings")"
+            if [ -f "$candidate/app/build.gradle" ] && [ -f "$candidate/app/src/main/AndroidManifest.xml" ]; then
+              ROOT="$candidate"
+              break
+            fi
+          done < <(find . -type f \( -name settings.gradle -o -name settings.gradle.kts \) -not -path './.git/*' -not -path '*/.gradle/*' | sort)
+          if [ -z "$ROOT" ]; then
+            echo '::error::Could not locate an Android project root containing settings.gradle and app/build.gradle.'
+            echo 'Repository files (first 200):'
+            find . -maxdepth 5 -type f -not -path './.git/*' | sort | head -200
+            exit 1
+          fi
+          ROOT="${ROOT#./}"
+          [ -n "$ROOT" ] || ROOT='.'
+          echo "root=$ROOT" >> "$GITHUB_OUTPUT"
+          echo "Android project root: $ROOT"
+
+      - name: Verify Android project files
+        env:
+          PROJECT_ROOT: ${{ steps.project.outputs.root }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_ROOT"
+          missing=0
+          for file in settings.gradle settings.gradle.kts build.gradle build.gradle.kts app/build.gradle app/build.gradle.kts app/src/main/AndroidManifest.xml; do
+            if [ -f "$file" ]; then echo "[OK] $file"; fi
+          done
+          if [ ! -f settings.gradle ] && [ ! -f settings.gradle.kts ]; then echo '[MISSING] settings.gradle(.kts)'; missing=1; fi
+          if [ ! -f build.gradle ] && [ ! -f build.gradle.kts ]; then echo '[MISSING] build.gradle(.kts)'; missing=1; fi
+          if [ ! -f app/build.gradle ] && [ ! -f app/build.gradle.kts ]; then echo '[MISSING] app/build.gradle(.kts)'; missing=1; fi
+          [ -f app/src/main/AndroidManifest.xml ] || { echo '[MISSING] app/src/main/AndroidManifest.xml'; missing=1; }
+          if [ ! -f app/src/main/java/com/hackerexos/ide/MainActivity.java ] && ! find app/src/main -type f \( -name MainActivity.java -o -name MainActivity.kt \) -print -quit | grep -q .; then
+            echo '[MISSING] MainActivity.java/kt (searched under app/src/main)'; missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then exit 1; fi
+
+      - name: Apply application name
+        env:
+          APP_NAME: ${{ inputs.app_name }}
+          PROJECT_ROOT: ${{ steps.project.outputs.root }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_ROOT"
+          python3 - <<'PY'
+          import os
+          import xml.etree.ElementTree as ET
+          name = os.environ.get('APP_NAME', 'My Android App').strip()[:60] or 'My Android App'
+          path = 'app/src/main/res/values/strings.xml'
+          os.makedirs(os.path.dirname(path), exist_ok=True)
+          if os.path.exists(path):
+              tree = ET.parse(path)
+              root = tree.getroot()
+          else:
+              root = ET.Element('resources')
+              tree = ET.ElementTree(root)
+          node = root.find("string[@name='app_name']")
+          if node is None:
+              node = ET.SubElement(root, 'string', {'name': 'app_name'})
+          node.text = name
+          ET.indent(root, space='    ')
+          tree.write(path, encoding='utf-8', xml_declaration=True)
+          safe = ''.join(c if c.isalnum() or c in '-_.' else '_' for c in name).strip('._') or 'AndroidApp'
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as env:
+              env.write(f'APK_NAME={safe}.apk\n')
+          PY
+
+      - name: Build debug APK
+        env:
+          PROJECT_ROOT: ${{ steps.project.outputs.root }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_ROOT"
+          gradle --no-daemon assembleDebug --stacktrace
+
+      - name: Prepare APK artifact
+        env:
+          PROJECT_ROOT: ${{ steps.project.outputs.root }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p output
+          APK="$PROJECT_ROOT/app/build/outputs/apk/debug/app-debug.apk"
+          if [ ! -f "$APK" ]; then
+            echo "::error::APK was not found at $APK"
+            find "$PROJECT_ROOT/app/build/outputs" -type f 2>/dev/null || true
+            exit 1
+          fi
+          cp "$APK" "output/${APK_NAME}"
+          ls -lh "output/${APK_NAME}"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: HackerExos-APK
+          path: output/*.apk
+          if-no-files-found: error
+          retention-days: 7
