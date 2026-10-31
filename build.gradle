@@ -1,0 +1,18 @@
+plugins {
+<<<<<<< HEAD
+    id 'com.android.application'
+}
+android {
+    namespace 'com.hackerexos.ide'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.hackerexos.ide'
+        minSdk 23
+        targetSdk 28
+        versionCode 1
+        versionName '1.0'
+    }
+=======
+    id 'com.android.application' version '8.7.3' apply false
+>>>>>>> 746416874d4989f829bb97eeef68f860ca556f3d
+}
