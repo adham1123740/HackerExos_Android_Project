@@ -1,46 +1,155 @@
-package com.hackerexos.ide;
+package com.wormgpt.soundapp;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.os.Handler;
+import android.media.AudioManager;
+import android.media.ToneGenerator;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.view.Gravity;
-import android.view.View;
-import android.view.animation.AnimationUtils;
+import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-import android.widget.ScrollView;
 
 public class MainActivity extends Activity {
-    private int dp(float value) { return (int)(value * getResources().getDisplayMetrics().density + 0.5f); }
-    private TextView label(String text, int size, int color) {
-        TextView v = new TextView(this); v.setText(text); v.setTextSize(size); v.setTextColor(color); return v;
+
+    private ToneGenerator tone;
+    private Handler handler = new Handler();
+    private boolean isPlaying = false;
+
+    private TextView status;
+    private Button startButton;
+    private Button stopButton;
+
+    private final Runnable soundRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (!isPlaying || tone == null) return;
+
+            tone.startTone(ToneGenerator.TONE_PROP_BEEP, 500);
+            handler.postDelayed(this, 800);
+        }
+    };
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        tone = new ToneGenerator(
+            AudioManager.STREAM_MUSIC,
+            85
+        );
+
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setGravity(Gravity.CENTER);
+        layout.setPadding(25, 25, 25, 25);
+        layout.setBackgroundColor(Color.rgb(15, 15, 20));
+
+        TextView title = new TextView(this);
+        title.setText("Sound Controller");
+        title.setTextSize(28);
+        title.setTextColor(Color.WHITE);
+        title.setTypeface(null, Typeface.BOLD);
+        title.setGravity(Gravity.CENTER);
+
+        LinearLayout.LayoutParams titleParams =
+            new LinearLayout.LayoutParams(-1, -2);
+        titleParams.bottomMargin = 35;
+
+        layout.addView(title, titleParams);
+
+        status = new TextView(this);
+        status.setText("الصوت متوقف");
+        status.setTextSize(18);
+        status.setTextColor(Color.LTGRAY);
+        status.setGravity(Gravity.CENTER);
+
+        LinearLayout.LayoutParams statusParams =
+            new LinearLayout.LayoutParams(-1, -2);
+        statusParams.bottomMargin = 35;
+
+        layout.addView(status, statusParams);
+
+        startButton = new Button(this);
+        startButton.setText("▶ تشغيل الصوت");
+        startButton.setTextSize(17);
+
+        stopButton = new Button(this);
+        stopButton.setText("■ إيقاف الصوت");
+        stopButton.setTextSize(17);
+
+        LinearLayout.LayoutParams buttonParams =
+            new LinearLayout.LayoutParams(-1, 60);
+
+        buttonParams.bottomMargin = 15;
+
+        layout.addView(startButton, buttonParams);
+        layout.addView(stopButton, buttonParams);
+
+        startButton.setBackgroundTintList(
+            android.content.res.ColorStateList.valueOf(
+                Color.rgb(210, 35, 65)
+            )
+        );
+
+        stopButton.setBackgroundTintList(
+            android.content.res.ColorStateList.valueOf(
+                Color.rgb(65, 65, 75)
+            )
+        );
+
+        startButton.setTextColor(Color.WHITE);
+        stopButton.setTextColor(Color.WHITE);
+
+        startButton.setOnClickListener(v -> startSound());
+        stopButton.setOnClickListener(v -> stopSound());
+
+        setContentView(layout);
     }
-    private TextView card(String title, String subtitle) {
-        TextView v = label(title + "\n" + subtitle, 15, Color.WHITE);
-        v.setPadding(dp(16), dp(16), dp(16), dp(16)); v.setBackgroundColor(Color.rgb(20,27,46));
-        v.setLineSpacing(dp(4), 1f); return v;
+
+    private void startSound() {
+        if (isPlaying) return;
+
+        isPlaying = true;
+
+        status.setText("● الصوت يعمل الآن");
+        status.setTextColor(Color.GREEN);
+
+        startButton.setEnabled(false);
+        stopButton.setEnabled(true);
+
+        handler.post(soundRunnable);
     }
-    @Override public void onCreate(Bundle state) {
-        super.onCreate(state);
-        getWindow().setStatusBarColor(Color.rgb(9,13,24));
-        getWindow().setNavigationBarColor(Color.rgb(9,13,24));
-        LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(Color.rgb(9,13,24)); root.setPadding(dp(20),dp(22),dp(20),dp(16));
-        ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true);
-        LinearLayout content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL);
-        TextView badge = label("●  HACKEREXOS  /  ANDROID", 12, Color.rgb(50,230,208)); badge.setTypeface(Typeface.MONOSPACE,Typeface.BOLD);
-        TextView title = label("Your next idea,\nbuilt beautifully.", 30, Color.WHITE); title.setTypeface(Typeface.DEFAULT,Typeface.BOLD); title.setPadding(0,dp(20),0,dp(10));
-        TextView sub = label("A starter app generated by HackerExos IDE", 15, Color.rgb(166,180,205)); sub.setPadding(0,0,0,dp(24));
-        content.addView(badge); content.addView(title); content.addView(sub);
-        TextView c1 = card("01   Project ready", "Android project scaffold is loaded and ready to customize.");
-        LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-1,-2); cp.bottomMargin=dp(12); content.addView(c1,cp);
-        TextView c2 = card("02   Motion system", "Splash screen, fade transitions and pulse animation resources included."); content.addView(c2,cp);
-        TextView c3 = card("03   Cloud build", "Build APK through the connected GitHub Actions workflow."); content.addView(c3,cp);
-        TextView button = label("HACKEREXOS  •  READY", 14, Color.rgb(9,13,24)); button.setGravity(Gravity.CENTER); button.setTypeface(Typeface.MONOSPACE,Typeface.BOLD); button.setPadding(dp(16),dp(16),dp(16),dp(16)); button.setBackgroundColor(Color.rgb(50,230,208));
-        LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(-1,-2); bp.topMargin=dp(18); content.addView(button,bp);
-        scroll.addView(content); root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1)); setContentView(root);
-        root.startAnimation(AnimationUtils.loadAnimation(this, R.anim.fade_in));
-        title.setLayerType(View.LAYER_TYPE_HARDWARE,null); title.startAnimation(AnimationUtils.loadAnimation(this,R.anim.fade_in));
+
+    private void stopSound() {
+        isPlaying = false;
+
+        handler.removeCallbacks(soundRunnable);
+
+        if (tone != null) {
+            tone.stopTone();
+        }
+
+        status.setText("الصوت متوقف");
+        status.setTextColor(Color.LTGRAY);
+
+        startButton.setEnabled(true);
+        stopButton.setEnabled(false);
+    }
+
+    @Override
+    protected void onDestroy() {
+        stopSound();
+
+        if (tone != null) {
+            tone.release();
+            tone = null;
+        }
+
+        handler.removeCallbacksAndMessages(null);
+
+        super.onDestroy();
     }
 }
