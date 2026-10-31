@@ -2,154 +2,131 @@ package com.wormgpt.soundapp;
 
 import android.app.Activity;
 import android.os.Bundle;
-import android.os.Handler;
-import android.media.AudioManager;
-import android.media.ToneGenerator;
 import android.graphics.Color;
 import android.graphics.Typeface;
-import android.view.Gravity;
-import android.widget.Button;
-import android.widget.LinearLayout;
-import android.widget.TextView;
+import android.view.*;
+import android.widget.*;
+import android.view.animation.*;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends Activity {
 
-    private ToneGenerator tone;
-    private Handler handler = new Handler();
-    private boolean isPlaying = false;
-
-    private TextView status;
-    private Button startButton;
-    private Button stopButton;
-
-    private final Runnable soundRunnable = new Runnable() {
-        @Override
-        public void run() {
-            if (!isPlaying || tone == null) return;
-
-            tone.startTone(ToneGenerator.TONE_PROP_BEEP, 500);
-            handler.postDelayed(this, 800);
-        }
-    };
+    private LinearLayout chatContainer;
+    private EditText messageInput;
+    private Button sendButton;
+    private ScrollView scrollView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        tone = new ToneGenerator(
-            AudioManager.STREAM_MUSIC,
-            85
-        );
+        // Root Layout
+        RelativeLayout root = new RelativeLayout(this);
+        root.setBackgroundColor(Color.parseColor("#0b141a"));
 
-        LinearLayout layout = new LinearLayout(this);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setGravity(Gravity.CENTER);
-        layout.setPadding(25, 25, 25, 25);
-        layout.setBackgroundColor(Color.rgb(15, 15, 20));
+        // Header (Toolbar)
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setPadding(30, 30, 30, 30);
+        header.setBackgroundColor(Color.parseColor("#202c33"));
+        header.setGravity(Gravity.CENTER_VERTICAL);
 
-        TextView title = new TextView(this);
-        title.setText("Sound Controller");
-        title.setTextSize(28);
-        title.setTextColor(Color.WHITE);
-        title.setTypeface(null, Typeface.BOLD);
-        title.setGravity(Gravity.CENTER);
+        TextView headerTitle = new TextView(this);
+        headerTitle.setText("WormGPT Chat");
+        headerTitle.setTextColor(Color.WHITE);
+        headerTitle.setTextSize(20);
+        headerTitle.setTypeface(null, Typeface.BOLD);
+        header.addView(headerTitle);
 
-        LinearLayout.LayoutParams titleParams =
-            new LinearLayout.LayoutParams(-1, -2);
-        titleParams.bottomMargin = 35;
+        root.addView(header, new RelativeLayout.LayoutParams(-1, -2));
 
-        layout.addView(title, titleParams);
+        // Chat Area
+        scrollView = new ScrollView(this);
+        RelativeLayout.LayoutParams scrollParams = new RelativeLayout.LayoutParams(-1, -2);
+        scrollParams.addRule(RelativeLayout.BELOW, header);
+        scrollParams.addRule(RelativeLayout.ABOVE, 500); // Placeholder for input
+        
+        chatContainer = new LinearLayout(this);
+        chatContainer.setOrientation(LinearLayout.VERTICAL);
+        chatContainer.setPadding(30, 30, 30, 30);
+        chatContainer.setGravity(Gravity.BOTTOM);
+        
+        scrollView.addView(chatContainer);
+        root.addView(scrollView, scrollParams);
 
-        status = new TextView(this);
-        status.setText("الصوت متوقف");
-        status.setTextSize(18);
-        status.setTextColor(Color.LTGRAY);
-        status.setGravity(Gravity.CENTER);
+        // Input Area
+        LinearLayout inputLayout = new LinearLayout(this);
+        inputLayout.setOrientation(LinearLayout.HORIZONTAL);
+        inputLayout.setPadding(20, 20, 20, 20);
+        inputLayout.setBackgroundColor(Color.parseColor("#202c33"));
+        inputLayout.setGravity(Gravity.CENTER_VERTICAL);
 
-        LinearLayout.LayoutParams statusParams =
-            new LinearLayout.LayoutParams(-1, -2);
-        statusParams.bottomMargin = 35;
+        messageInput = new EditText(this);
+        messageInput.setHint("اكتب رسالتك هنا...");
+        messageInput.setHintTextColor(Color.GRAY);
+        messageInput.setTextColor(Color.WHITE);
+        messageInput.setBackgroundColor(Color.parseColor("#2a3942"));
+        messageInput.setPadding(30, 30, 30, 30);
+        LinearLayout.LayoutParams inputParams = new LinearLayout.LayoutParams(0, -2, 1f);
+        
+        sendButton = new Button(this);
+        sendButton.setText("إرسال");
+        sendButton.setBackgroundColor(Color.parseColor("#00a884"));
+        sendButton.setTextColor(Color.WHITE);
 
-        layout.addView(status, statusParams);
+        inputLayout.addView(messageInput, inputParams);
+        inputLayout.addView(sendButton);
 
-        startButton = new Button(this);
-        startButton.setText("▶ تشغيل الصوت");
-        startButton.setTextSize(17);
+        RelativeLayout.LayoutParams inputRootParams = new RelativeLayout.LayoutParams(-1, -2);
+        inputRootParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+        root.addView(inputLayout, inputRootParams);
 
-        stopButton = new Button(this);
-        stopButton.setText("■ إيقاف الصوت");
-        stopButton.setTextSize(17);
+        sendButton.setOnClickListener(v -> {
+            String msg = messageInput.getText().toString().trim();
+            if (!msg.isEmpty()) {
+                addMessage(msg, true);
+                messageInput.setText("");
+            }
+        });
 
-        LinearLayout.LayoutParams buttonParams =
-            new LinearLayout.LayoutParams(-1, 60);
-
-        buttonParams.bottomMargin = 15;
-
-        layout.addView(startButton, buttonParams);
-        layout.addView(stopButton, buttonParams);
-
-        startButton.setBackgroundTintList(
-            android.content.res.ColorStateList.valueOf(
-                Color.rgb(210, 35, 65)
-            )
-        );
-
-        stopButton.setBackgroundTintList(
-            android.content.res.ColorStateList.valueOf(
-                Color.rgb(65, 65, 75)
-            )
-        );
-
-        startButton.setTextColor(Color.WHITE);
-        stopButton.setTextColor(Color.WHITE);
-
-        startButton.setOnClickListener(v -> startSound());
-        stopButton.setOnClickListener(v -> stopSound());
-
-        setContentView(layout);
+        setContentView(root);
+        
+        // Welcome Message
+        addMessage("مرحباً بك في واجهة WormGPT الخرافية! 🚀", false);
     }
 
-    private void startSound() {
-        if (isPlaying) return;
+    private void addMessage(String text, boolean isMe) {
+        TextView msgView = new TextView(this);
+        msgView.setText(text);
+        msgView.setPadding(40, 20, 40, 20);
+        msgView.setTextSize(16);
+        msgView.setTextColor(Color.WHITE);
+        
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-2, -2);
+        params.setMargins(0, 10, 0, 10);
 
-        isPlaying = true;
-
-        status.setText("● الصوت يعمل الآن");
-        status.setTextColor(Color.GREEN);
-
-        startButton.setEnabled(false);
-        stopButton.setEnabled(true);
-
-        handler.post(soundRunnable);
-    }
-
-    private void stopSound() {
-        isPlaying = false;
-
-        handler.removeCallbacks(soundRunnable);
-
-        if (tone != null) {
-            tone.stopTone();
+        if (isMe) {
+            msgView.setBackgroundColor(Color.parseColor("#005c4b"));
+            params.gravity = Gravity.END;
+        } else {
+            msgView.setBackgroundColor(Color.parseColor("#202c33"));
+            params.gravity = Gravity.START;
         }
 
-        status.setText("الصوت متوقف");
-        status.setTextColor(Color.LTGRAY);
+        msgView.setLayoutParams(params);
+        
+        // Animation
+        Animation fadeIn = new AlphaAnimation(0.0f, 1.0f);
+        fadeIn.setDuration(500);
+        Animation slideUp = new TranslateAnimation(0, 0, 100, 0);
+        slideUp.setDuration(500);
+        
+        msgView.startAnimation(fadeIn);
+        msgView.startAnimation(slideUp);
 
-        startButton.setEnabled(true);
-        stopButton.setEnabled(false);
-    }
-
-    @Override
-    protected void onDestroy() {
-        stopSound();
-
-        if (tone != null) {
-            tone.release();
-            tone = null;
-        }
-
-        handler.removeCallbacksAndMessages(null);
-
-        super.onDestroy();
+        chatContainer.addView(msgView);
+        scrollView.post(() -> scrollView.fullScroll(View.FOCUS_DOWN));
     }
 }
