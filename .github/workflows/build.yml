@@ -1,23 +1,46 @@
+<<<<<<< HEAD
 name: HackerExos IDE - Build APK
+=======
+name: HackerExos Android APK
+>>>>>>> 746416874d4989f829bb97eeef68f860ca556f3d
 
 on:
   workflow_dispatch:
     inputs:
       app_name:
+<<<<<<< HEAD
         description: 'اسم التطبيق الذي سيظهر على الهاتف واسم ملف APK'
         required: true
         default: 'My Android App'
+=======
+        description: Android app display name
+        required: true
+        default: MyApp
+>>>>>>> 746416874d4989f829bb97eeef68f860ca556f3d
         type: string
 
 permissions:
   contents: read
 
+<<<<<<< HEAD
+=======
+concurrency:
+  group: hackerexos-android-build-${{ github.ref }}
+  cancel-in-progress: false
+
+>>>>>>> 746416874d4989f829bb97eeef68f860ca556f3d
 jobs:
   build:
     name: Build Android APK
     runs-on: ubuntu-latest
+<<<<<<< HEAD
     steps:
       - name: Checkout repository
+=======
+    timeout-minutes: 25
+    steps:
+      - name: Checkout source
+>>>>>>> 746416874d4989f829bb97eeef68f860ca556f3d
         uses: actions/checkout@v4
 
       - name: Set up Java 17
@@ -25,6 +48,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+<<<<<<< HEAD
           cache: gradle
 
       - name: Locate Android project root
@@ -128,9 +152,57 @@ jobs:
           ls -lh "output/${APK_NAME}"
 
       - name: Upload APK
+=======
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Set app label
+        env:
+          APP_NAME: ${{ inputs.app_name }}
+        run: |
+          python3 - <<'PY'
+          import os
+          from xml.sax.saxutils import escape
+          name = os.environ.get('APP_NAME', 'MyApp').strip() or 'MyApp'
+          name = name[:40]
+          os.makedirs('app/src/main/res/values', exist_ok=True)
+          with open('app/src/main/res/values/strings.xml', 'w', encoding='utf-8') as f:
+              f.write('<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <string name="app_name">' + escape(name) + '</string>\n</resources>\n')
+          safe = ''.join(c if c.isalnum() or c in '._-' else '_' for c in name).strip('._-') or 'MyApp'
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as f:
+              f.write('APK_NAME=' + safe + '.apk\n')
+          PY
+
+      - name: Validate Android project
+        run: |
+          test -f settings.gradle
+          test -f build.gradle
+          test -f app/build.gradle
+          test -f app/src/main/AndroidManifest.xml
+          test -f app/src/main/java/com/hackerexos/ide/MainActivity.java
+
+      - name: Build debug APK
+        run: gradle --no-daemon --stacktrace assembleDebug
+
+      - name: Prepare named APK
+        run: |
+          mkdir -p output
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk "output/${APK_NAME}"
+          ls -lh output
+
+      - name: Upload APK artifact
+>>>>>>> 746416874d4989f829bb97eeef68f860ca556f3d
         uses: actions/upload-artifact@v4
         with:
           name: HackerExos-APK
           path: output/*.apk
           if-no-files-found: error
+<<<<<<< HEAD
           retention-days: 7
+=======
+          retention-days: 14
+>>>>>>> 746416874d4989f829bb97eeef68f860ca556f3d
