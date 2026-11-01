@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.content.Intent;
 import android.media.projection.MediaProjectionManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.view.View;
@@ -30,7 +31,6 @@ public class MainActivity extends Activity {
         Button btnDownload = findViewById(R.id.btnDownload);
         Button btnStart = findViewById(R.id.btnStart);
 
-        // إخفاء زر التنزيل وشريط التحميل
         btnDownload.setVisibility(View.GONE);
         progress.setVisibility(View.GONE);
         
@@ -38,27 +38,49 @@ public class MainActivity extends Activity {
         btnStart.setText("تشغيل ESP");
         btnStart.setEnabled(true);
 
-        btnStart.setOnClickListener(v -> launchCapture());
+        btnStart.setOnClickListener(v -> checkAndRequestOverlay());
     }
 
-    private void launchCapture() {
+    private void checkAndRequestOverlay() {
+        // لو الصلاحية مش مفعلة، نطلبها
         if (!Settings.canDrawOverlays(this)) {
-            startActivityForResult(new Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:" + getPackageName())), REQ_OVERLAY);
+            try {
+                // محاولة فتح شاشة الصلاحية المخصصة للتطبيق
+                Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:" + getPackageName()));
+                startActivityForResult(intent, REQ_OVERLAY);
+            } catch (Exception e) {
+                // لو فشلت (زي ما بيحصل في أندرويد 16)، نفتح القائمة العامة
+                try {
+                    Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION);
+                    startActivityForResult(intent, REQ_OVERLAY);
+                } catch (Exception ex) {
+                    Toast.makeText(this, "افتح الإعدادات > التطبيقات > الوصول الخاص > الظهور فوق التطبيقات", Toast.LENGTH_LONG).show();
+                }
+            }
         } else {
+            startScreenCapture();
+        }
+    }
+
+    private void startScreenCapture() {
+        try {
             startActivityForResult(mpm.createScreenCaptureIntent(), REQ_CAPTURE);
+        } catch (Exception e) {
+            Toast.makeText(this, "فشل بدء تصوير الشاشة", Toast.LENGTH_SHORT).show();
         }
     }
 
     @Override
     protected void onActivityResult(int req, int res, Intent data) {
         super.onActivityResult(req, res, data);
+        
         if (req == REQ_OVERLAY) {
+            // بعد ما المستخدم يرجع من الإعدادات، نتأكد تاني
             if (Settings.canDrawOverlays(this)) {
-                startActivityForResult(mpm.createScreenCaptureIntent(), REQ_CAPTURE);
+                startScreenCapture();
             } else {
-                Toast.makeText(this, "صلاحية Overlay مرفوضة", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "لازم تفعل صلاحية 'الظهور فوق التطبيقات' عشان ESP يشتغل", Toast.LENGTH_LONG).show();
             }
         } else if (req == REQ_CAPTURE) {
             if (res == Activity.RESULT_OK && data != null) {
