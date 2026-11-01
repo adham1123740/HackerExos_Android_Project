@@ -1,232 +1,213 @@
-package com.wormgpt.wormpanel;
+package com.mahi.overlayesp;
 
 import android.app.Activity;
-import android.content.Context;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.media.projection.MediaProjectionManager;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
-import android.graphics.Color;
-import android.graphics.Typeface;
-import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
-import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
+import androidx.appcompat.app.AppCompatActivity;
 
-public class MainActivity extends Activity {
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 
-    private static final int OVERLAY_REQUEST = 1001;
-    private static final int CAPTURE_REQUEST = 1002;
+public class MainActivity extends AppCompatActivity {
 
-    private LinearLayout root;
+    private static final int REQ_OVERLAY = 100;
+    private static final int REQ_CAPTURE = 200;
+    private static final String MODEL_URL =
+            "https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8n.tflite";
+    private static final String MODEL_NAME = "yolov8n.tflite";
+
+    private MediaProjectionManager mpm;
+    private TextView statusText;
+    private ProgressBar progress;
+    private Button btnDownload, btnStart;
+    private final Handler ui = new Handler(Looper.getMainLooper());
+    private volatile boolean downloading = false;
+    private volatile boolean cancelDownload = false;
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+    protected void onCreate(Bundle s) {
+        super.onCreate(s);
+        setContentView(R.layout.activity_main);
+        mpm = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
 
-        buildUI();
+        statusText = findViewById(R.id.statusText);
+        progress   = findViewById(R.id.progress);
+        btnDownload = findViewById(R.id.btnDownload);
+        btnStart    = findViewById(R.id.btnStart);
 
-        if (getIntent().getBooleanExtra("request_capture", false)) {
-            requestScreenCapture();
+        btnDownload.setOnClickListener(v -> startDownload());
+        btnStart.setOnClickListener(v -> launchCapture());
+
+        refreshModelState();
+    }
+
+    private File modelFile() {
+        File dir = new File(getFilesDir(), "models");
+        if (!dir.exists()) dir.mkdirs();
+        return new File(dir, MODEL_NAME);
+    }
+
+    private boolean modelReady() {
+        File f = modelFile();
+        return f.exists() && f.length() > 1_000_000;
+    }
+
+    private void refreshModelState() {
+        if (modelReady()) {
+            statusText.setText("الحالة: YOLO موجود — يمكنك استخدامه");
+            btnDownload.setEnabled(false);
+            btnDownload.setText("YOLO موجود ✓");
+            btnStart.setEnabled(true);
+        } else {
+            statusText.setText("الحالة: النموذج غير موجود — اضغط تنزيل");
+            btnDownload.setEnabled(true);
+            btnDownload.setText("تنزيل YOLO");
+            btnStart.setEnabled(false);
         }
     }
 
-    private void buildUI() {
+    private void startDownload() {
+        if (downloading) return;
+        if (modelReady()) {
+            Toast.makeText(this, "YOLO موجود مسبقاً، يمكنك استخدامه", Toast.LENGTH_SHORT).show();
+            refreshModelState();
+            return;
+        }
+        downloading = true;
+        cancelDownload = false;
+        progress.setVisibility(View.VISIBLE);
+        progress.setProgress(0);
+        btnDownload.setEnabled(false);
+        btnDownload.setText("جاري التنزيل…");
 
-        root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(24), dp(30), dp(24), dp(24));
-        root.setBackgroundColor(Color.rgb(13, 13, 17));
+        new Thread(this::downloadWorker, "model-dl").start();
+    }
 
-        TextView title = new TextView(this);
-        title.setText("WORMPANEL");
-        title.setTextSize(28);
-        title.setTextColor(Color.rgb(255, 45, 65));
-        title.setTypeface(Typeface.DEFAULT_BOLD);
+    private void downloadWorker() {
+        HttpURLConnection conn = null;
+        try {
+            File target = modelFile();
+            File tmp = new File(target.getAbsolutePath() + ".part");
+            if (tmp.exists()) tmp.delete();
 
-        root.addView(title);
+            URL u = new URL(MODEL_URL);
+            conn = (HttpURLConnection) u.openConnection();
+            conn.setConnectTimeout(15_000);
+            conn.setReadTimeout(60_000);
+            conn.setInstanceFollowRedirects(true);
+            conn.connect();
 
-        TextView subtitle = new TextView(this);
-        subtitle.setText("FLOATING CONTROL CENTER");
-        subtitle.setTextSize(12);
-        subtitle.setTextColor(Color.LTGRAY);
-        subtitle.setPadding(0, dp(6), 0, dp(30));
+            int code = conn.getResponseCode();
+            if (code < 200 || code >= 300) throw new IOException("HTTP " + code);
 
-        root.addView(subtitle);
+            long total = conn.getContentLengthLong();
+            InputStream in = conn.getInputStream();
+            FileOutputStream out = new FileOutputStream(tmp);
 
-        TextView status = new TextView(this);
-        status.setText("● SYSTEM READY");
-        status.setTextColor(Color.GREEN);
-        status.setTextSize(14);
+            byte[] buf = new byte[64 * 1024];
+            long read = 0;
+            int n, lastPct = -1;
+            while ((n = in.read(buf)) != -1) {
+                if (cancelDownload) throw new IOException("cancelled");
+                out.write(buf, 0, n);
+                read += n;
+                if (total > 0) {
+                    int pct = (int)(read * 100 / total);
+                    if (pct != lastPct) {
+                        lastPct = pct;
+                        final int p = pct;
+                        ui.post(() -> progress.setProgress(p));
+                    }
+                }
+            }
+            out.flush();
+            out.getFD().sync();
+            out.close();
+            in.close();
 
-        root.addView(status);
+            if (target.exists()) target.delete();
+            if (!tmp.renameTo(target)) throw new IOException("rename failed");
+            if (target.length() < 1_000_000) throw new IOException("file too small");
 
-        addButton("ENABLE FLOATING PANEL", v -> {
-            if (!Settings.canDrawOverlays(this)) {
-                Intent intent = new Intent(
+            ui.post(() -> {
+                downloading = false;
+                progress.setVisibility(View.GONE);
+                refreshModelState();
+                Toast.makeText(this, "تم التنزيل وحفظه بنجاح", Toast.LENGTH_LONG).show();
+            });
+        } catch (Exception e) {
+            ui.post(() -> {
+                downloading = false;
+                progress.setVisibility(View.GONE);
+                refreshModelState();
+                new AlertDialog.Builder(this)
+                        .setTitle("فشل التنزيل")
+                        .setMessage(e.getMessage())
+                        .setPositiveButton("إعادة المحاولة", (d, w) -> startDownload())
+                        .setNegativeButton("إلغاء", null)
+                        .show();
+            });
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
+    private void launchCapture() {
+        if (!modelReady()) {
+            Toast.makeText(this, "حمّل النموذج أولاً", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (!Settings.canDrawOverlays(this)) {
+            startActivityForResult(new Intent(
                     Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:" + getPackageName())
-                );
-
-                startActivityForResult(intent, OVERLAY_REQUEST);
-            } else {
-                startFloatingService();
-            }
-        });
-
-        addButton("SCREEN CAPTURE PERMISSION", v -> {
-            requestScreenCapture();
-        });
-
-        addButton("OPEN PUBG MOBILE", v -> {
-            launchPUBG();
-        });
-
-        addButton("STOP FLOATING PANEL", v -> {
-            stopService(new Intent(this, FloatingService.class));
-            Toast.makeText(
-                this,
-                "Floating panel stopped",
-                Toast.LENGTH_SHORT
-            ).show();
-        });
-
-        TextView footer = new TextView(this);
-        footer.setText(
-            "\nWormPanel v1.0\n" +
-            "Android Floating Tools\n" +
-            "ESP Demo does not read game data."
-        );
-
-        footer.setTextColor(Color.GRAY);
-        footer.setTextSize(12);
-        footer.setGravity(Gravity.CENTER);
-        footer.setPadding(0, dp(35), 0, 0);
-
-        root.addView(footer);
-
-        setContentView(root);
-    }
-
-    private void addButton(String text, View.OnClickListener listener) {
-
-        Button button = new Button(this);
-        button.setText(text);
-        button.setTextColor(Color.WHITE);
-        button.setAllCaps(false);
-        button.setBackgroundTintList(
-            android.content.res.ColorStateList.valueOf(
-                Color.rgb(180, 20, 40)
-            )
-        );
-
-        LinearLayout.LayoutParams params =
-            new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                dp(56)
-            );
-
-        params.setMargins(0, dp(10), 0, dp(5));
-
-        root.addView(button, params);
-        button.setOnClickListener(listener);
-    }
-
-    private void startFloatingService() {
-
-        Intent intent = new Intent(this, FloatingService.class);
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent);
+                    Uri.parse("package:" + getPackageName())), REQ_OVERLAY);
         } else {
-            startService(intent);
-        }
-
-        Toast.makeText(
-            this,
-            "Floating panel enabled",
-            Toast.LENGTH_SHORT
-        ).show();
-    }
-
-    private void requestScreenCapture() {
-
-        MediaProjectionManager manager =
-            (MediaProjectionManager) getSystemService(
-                Context.MEDIA_PROJECTION_SERVICE
-            );
-
-        if (manager != null) {
-            startActivityForResult(
-                manager.createScreenCaptureIntent(),
-                CAPTURE_REQUEST
-            );
-        }
-    }
-
-    private void launchPUBG() {
-
-        // Global PUBG Mobile package name.
-        String packageName = "com.tencent.ig";
-
-        Intent launchIntent =
-            getPackageManager().getLaunchIntentForPackage(packageName);
-
-        if (launchIntent != null) {
-            startActivity(launchIntent);
-        } else {
-            Toast.makeText(
-                this,
-                "PUBG Mobile was not found. Your version may use a different package name.",
-                Toast.LENGTH_LONG
-            ).show();
+            startActivityForResult(mpm.createScreenCaptureIntent(), REQ_CAPTURE);
         }
     }
 
     @Override
-    protected void onActivityResult(
-        int requestCode,
-        int resultCode,
-        Intent data
-    ) {
-        super.onActivityResult(requestCode, resultCode, data);
-
-        if (requestCode == OVERLAY_REQUEST) {
-
+    protected void onActivityResult(int req, int res, Intent data) {
+        super.onActivityResult(req, res, data);
+        if (req == REQ_OVERLAY) {
             if (Settings.canDrawOverlays(this)) {
-                startFloatingService();
+                startActivityForResult(mpm.createScreenCaptureIntent(), REQ_CAPTURE);
             } else {
-                Toast.makeText(
-                    this,
-                    "Overlay permission was not granted",
-                    Toast.LENGTH_SHORT
-                ).show();
+                Toast.makeText(this, "صلاحية Overlay مرفوضة", Toast.LENGTH_LONG).show();
             }
-
-        } else if (requestCode == CAPTURE_REQUEST) {
-
-            if (resultCode == RESULT_OK && data != null) {
-                Toast.makeText(
-                    this,
-                    "Screen capture permission granted for this session",
-                    Toast.LENGTH_LONG
-                ).show();
+        } else if (req == REQ_CAPTURE) {
+            if (res == Activity.RESULT_OK && data != null) {
+                Intent svc = new Intent(this, OverlayService.class);
+                svc.setAction(OverlayService.ACTION_START);
+                svc.putExtra("code", res);
+                svc.putExtra("data", data);
+                startForegroundService(svc);
+                Toast.makeText(this, "ESP يعمل الآن", Toast.LENGTH_SHORT).show();
+                finish();
             } else {
-                Toast.makeText(
-                    this,
-                    "Screen capture permission denied",
-                    Toast.LENGTH_SHORT
-                ).show();
+                Toast.makeText(this, "مشاركة الشاشة مرفوضة", Toast.LENGTH_SHORT).show();
             }
         }
     }
 
-    private int dp(float value) {
-        return (int) (value * getResources()
-            .getDisplayMetrics().density + 0.5f);
+    @Override
+    protected void onDestroy() {
+        cancelDownload = true;
+        super.onDestroy();
     }
 }
