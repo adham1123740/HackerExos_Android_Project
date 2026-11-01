@@ -13,13 +13,10 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.io.File;
-
 public class MainActivity extends Activity {
 
     private static final int REQ_OVERLAY = 100;
     private static final int REQ_CAPTURE = 200;
-    private static final String MODEL_NAME = "yolov8n.tflite";
 
     private MediaProjectionManager mpm;
     private TextView statusText;
@@ -40,28 +37,10 @@ public class MainActivity extends Activity {
         btnDownload.setVisibility(View.GONE);
         progress.setVisibility(View.GONE);
 
-        checkModelFile();
+        statusText.setText("الحالة: جاهز للتشغيل");
+        btnStart.setEnabled(true);
+        btnStart.setText("تفعيل ESP");
         btnStart.setOnClickListener(v -> checkOverlay());
-    }
-
-    private void checkModelFile() {
-        try {
-            java.io.InputStream is = getAssets().open(MODEL_NAME);
-            int size = is.available();
-            is.close();
-
-            if (size > 1_000_000) {
-                statusText.setText("الحالة: جاهز للتشغيل");
-                btnStart.setEnabled(true);
-                btnStart.setText("تفعيل ESP وفتح ببجي");
-            } else {
-                statusText.setText("الحالة: الملف صغير أو تالف");
-                btnStart.setEnabled(false);
-            }
-        } catch (Exception e) {
-            statusText.setText("الحالة: الملف غير موجود في assets");
-            btnStart.setEnabled(false);
-        }
     }
 
     private void checkOverlay() {
@@ -83,32 +62,13 @@ public class MainActivity extends Activity {
                 Intent svc = new Intent(this, OverlayService.class);
                 svc.setAction(OverlayService.ACTION_START);
                 svc.putExtra("code", res);
-                // الحل السحري لمشكلة أندرويد 14+
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    svc.putExtra("data", data);
-                } else {
-                    svc.putExtra("data", data);
-                }
-                
+                svc.putExtra("data", data);
                 startForegroundService(svc);
-                openPubg();
+                Toast.makeText(this, "تم تشغيل ESP، افتح ببجي الآن", Toast.LENGTH_LONG).show();
                 finish();
             } else {
                 Toast.makeText(this, "تم رفض تصوير الشاشة", Toast.LENGTH_SHORT).show();
             }
         }
-    }
-
-    private void openPubg() {
-        String[] pkgs = {"com.tencent.ig", "com.pubg.krmobile", "com.rekoo.pubgm", "com.vng.pubgmobile"};
-        for (String pkg : pkgs) {
-            Intent i = getPackageManager().getLaunchIntentForPackage(pkg);
-            if (i != null) { 
-                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); 
-                startActivity(i); 
-                return; 
-            }
-        }
-        Toast.makeText(this, "لم يتم العثور على ببجي، افتحها يدوياً", Toast.LENGTH_SHORT).show();
     }
 }
