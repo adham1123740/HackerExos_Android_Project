@@ -1,38 +1,62 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#343541">
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/chatRecyclerView"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_above="@+id/inputLayout" />
-    <LinearLayout
-        android:id="@+id/inputLayout"
+    android:orientation="vertical"
+    android:background="#0B0F14"
+    android:padding="24dp"
+    android:gravity="center">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="OVERLAY ESP"
+        android:textColor="#00FF9C"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        android:fontFamily="monospace"
+        android:layout_marginBottom="8dp"/>
+
+    <TextView
+        android:id="@+id/statusText"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_alignParentBottom="true"
-        android:orientation="horizontal"
-        android:padding="12dp"
-        android:background="#40414F">
-        <EditText
-            android:id="@+id/messageInput"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:hint="Message AI..."
-            android:textColor="#FFFFFF"
-            android:textColorHint="#8E8EA0"
-            android:background="@android:color/transparent"
-            android:padding="10dp" />
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/sendButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            app:fabSize="mini"
-            android:src="@android:drawable/ic_menu_send"
-            app:tint="#FFFFFF" />
-    </LinearLayout>
-</RelativeLayout>
+        android:text="الحالة: جاري الفحص..."
+        android:textColor="#CCFFFFFF"
+        android:textSize="14sp"
+        android:fontFamily="monospace"
+        android:padding="16dp"
+        android:background="#1A1F2A"
+        android:layout_marginBottom="24dp"/>
+
+    <ProgressBar
+        android:id="@+id/progress"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:max="100"
+        android:progress="0"
+        android:visibility="gone"
+        android:layout_marginBottom="16dp"/>
+
+    <Button
+        android:id="@+id/btnDownload"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="تنزيل YOLO"
+        android:textColor="#0B0F14"
+        android:textStyle="bold"
+        android:backgroundTint="#00FF9C"
+        android:layout_marginBottom="12dp"/>
+
+    <Button
+        android:id="@+id/btnStart"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="تشغيل ESP"
+        android:textColor="#FFFFFF"
+        android:textStyle="bold"
+        android:backgroundTint="#FF2D55"
+        android:enabled="false"/>
+
+</LinearLayout>
