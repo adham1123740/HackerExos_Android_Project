@@ -14,6 +14,7 @@ import android.graphics.Paint;
 import android.graphics.PixelFormat;
 import android.graphics.PorterDuff;
 import android.graphics.RectF;
+import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
@@ -122,7 +123,7 @@ public class OverlayService extends Service {
 
     private void initInterpreter() throws Exception {
         Interpreter.Options opts = new Interpreter.Options();
-        opts.setNumThreads(4); // CPU عشان ثابت
+        opts.setNumThreads(4);
         
         android.content.res.AssetFileDescriptor afd = getAssets().openFd(MODEL_NAME);
         FileInputStream fis = new FileInputStream(afd.getFileDescriptor());
@@ -163,45 +164,60 @@ public class OverlayService extends Service {
     }
 
     private void setupFloatingUI() {
+        // --- 1. المربع العائم (تصميم احترافي) ---
         floatingBox = new TextView(this);
-        ((TextView) floatingBox).setText("HACK");
+        ((TextView) floatingBox).setText("CYBER\nHACK");
         ((TextView) floatingBox).setTextColor(Color.GREEN);
         ((TextView) floatingBox).setGravity(Gravity.CENTER);
-        ((TextView) floatingBox).setTextSize(14f);
+        ((TextView) floatingBox).setTextSize(12f);
+        ((TextView) floatingBox).setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
         
         GradientDrawable gd = new GradientDrawable();
-        gd.setColor(Color.parseColor("#AA000000"));
-        gd.setStroke(3, Color.GREEN);
-        gd.setCornerRadius(20);
+        gd.setColor(Color.parseColor("#E6000000"));
+        gd.setStroke(4, Color.GREEN);
+        gd.setCornerRadius(50);
         floatingBox.setBackground(gd);
 
         boxLp = new WindowManager.LayoutParams(
-                120, 120,
+                100, 100,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                 PixelFormat.TRANSLUCENT);
         boxLp.gravity = Gravity.TOP | Gravity.START;
-        boxLp.x = 100; boxLp.y = 300;
+        boxLp.x = 50; boxLp.y = 300;
 
+        // --- 2. لوحة التحكم (تصميم احترافي) ---
         LinearLayout ll = new LinearLayout(this);
         ll.setOrientation(LinearLayout.VERTICAL);
-        ll.setPadding(30, 30, 30, 30);
+        ll.setPadding(40, 40, 40, 40);
         GradientDrawable panelBg = new GradientDrawable();
-        panelBg.setColor(Color.parseColor("#DD111111"));
-        panelBg.setStroke(3, Color.GREEN);
+        panelBg.setColor(Color.parseColor("#F2111111"));
+        panelBg.setStroke(4, Color.GREEN);
         panelBg.setCornerRadius(30);
         ll.setBackground(panelBg);
 
+        TextView title = new TextView(this);
+        title.setText("OVERLAY CONTROL");
+        title.setTextColor(Color.GREEN);
+        title.setTextSize(16f);
+        title.setGravity(Gravity.CENTER);
+        title.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+        title.setPadding(0, 0, 0, 20);
+        ll.addView(title);
+
         TextView btnClose = new TextView(this);
-        btnClose.setText("X");
-        btnClose.setTextColor(Color.RED);
-        btnClose.setTextSize(20f);
-        btnClose.setGravity(Gravity.END);
+        btnClose.setText("إخفاء اللوحة");
+        btnClose.setTextColor(Color.WHITE);
+        btnClose.setBackgroundColor(Color.parseColor("#FF2D55"));
+        btnClose.setGravity(Gravity.CENTER);
+        btnClose.setPadding(30, 20, 30, 20);
+        btnClose.setTextSize(14f);
         ll.addView(btnClose);
 
         Button btnEsp = new Button(this);
         btnEsp.setText("ESP: ON");
         btnEsp.setTextColor(Color.BLACK);
+        btnEsp.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
         btnEsp.setBackgroundColor(Color.GREEN);
         ll.addView(btnEsp);
 
@@ -215,7 +231,7 @@ public class OverlayService extends Service {
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                 PixelFormat.TRANSLUCENT);
         panelLp.gravity = Gravity.TOP | Gravity.START;
-        panelLp.x = 100; panelLp.y = 450;
+        panelLp.x = 50; panelLp.y = 450;
 
         controlPanel.setOnTouchListener(new DragListener(panelLp, controlPanel));
 
