@@ -37,8 +37,6 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import org.tensorflow.lite.Interpreter;
-import org.tensorflow.lite.gpu.CompatibilityList;
-import org.tensorflow.lite.gpu.GpuDelegate;
 
 import java.io.File;
 import java.io.RandomAccessFile;
@@ -71,7 +69,6 @@ public class OverlayService extends Service {
     private Handler handler;
 
     private Interpreter interpreter;
-    private GpuDelegate gpuDelegate;
     private int inputSize = 640;
 
     private final Paint boxPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -129,13 +126,7 @@ public class OverlayService extends Service {
         if (!model.exists()) throw new Exception("Model missing");
 
         Interpreter.Options opts = new Interpreter.Options();
-        CompatibilityList compat = new CompatibilityList();
-        if (compat.isDelegateSupportedOnThisDevice()) {
-            gpuDelegate = new GpuDelegate(compat.getBestOptionsForThisDevice());
-            opts.addDelegate(gpuDelegate);
-        } else {
-            opts.setNumThreads(4);
-        }
+        opts.setNumThreads(4); // شغال على المعالج (CPU) بدل الـ GPU عشان نتجنب أخطاء البناء
         
         RandomAccessFile raf = new RandomAccessFile(model, "r");
         FileChannel ch = raf.getChannel();
@@ -389,7 +380,6 @@ public class OverlayService extends Service {
         try { if (mp != null) mp.stop(); } catch (Exception ignored) {}
         try { if (ht != null) ht.quitSafely(); } catch (Exception ignored) {}
         try { if (interpreter != null) interpreter.close(); } catch (Exception ignored) {}
-        try { if (gpuDelegate != null) gpuDelegate.close(); } catch (Exception ignored) {}
         super.onDestroy();
     }
 
