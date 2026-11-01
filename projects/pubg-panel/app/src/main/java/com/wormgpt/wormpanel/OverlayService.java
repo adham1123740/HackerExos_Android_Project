@@ -112,8 +112,9 @@ public class OverlayService extends Service {
         holder = surface.getHolder();
         holder.setFormat(PixelFormat.TRANSLUCENT);
         
-        // تأكد إن الطبقة دي شفافة ومش بتاخد لمس
-        surface.setAlpha(0.01f); // شفافية عالية جداً عشان النظام ميعتبرهاش حاجب
+        // --- حل مشكلة اللمس ---
+        // خلي الطبقة دي خفية تماماً ومتاخدش لمس
+        surface.setAlpha(0.01f); 
         holder.addCallback(new SurfaceHolder.Callback() {
             @Override public void surfaceCreated(SurfaceHolder h) { draw(); }
             @Override public void surfaceChanged(SurfaceHolder h, int f, int w, int hh) {}
@@ -124,7 +125,7 @@ public class OverlayService extends Service {
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                // دي أهم فلاجين: مش بتاخد لمس + مش بتعمل تركيز
+                // FLAG_NOT_TOUCHABLE بيمنع الطبقة دي من سحب أي لمسات
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                         | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
                         | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
@@ -135,7 +136,6 @@ public class OverlayService extends Service {
     }
 
     private void setupFloatingUI() {
-        // 1. المربع العائم
         floatingBox = new TextView(this);
         ((TextView) floatingBox).setText("HACK");
         ((TextView) floatingBox).setTextColor(Color.GREEN);
@@ -162,7 +162,6 @@ public class OverlayService extends Service {
         }));
         wm.addView(floatingBox, boxLp);
 
-        // 2. لوحة التحكم
         LinearLayout ll = new LinearLayout(this);
         ll.setOrientation(LinearLayout.VERTICAL);
         ll.setPadding(30, 30, 30, 30);
@@ -266,6 +265,8 @@ public class OverlayService extends Service {
             int minX = width, minY = height, maxX = 0, maxY = 0;
             boolean found = false;
 
+            // --- توسيع نطاق الكشف اللوني ---
+            // بدل ما كنا بندور على الأحمر بس، هندور على أي لون دافئ (بني، برتقالي، جلدي)
             for (int y = 0; y < height; y += 10) {
                 for (int x = 0; x < width; x += 10) {
                     int px = pixels[y * width + x];
@@ -273,7 +274,8 @@ public class OverlayService extends Service {
                     int g = (px >> 8) & 0xFF;
                     int b = px & 0xFF;
                     
-                    if (r > 150 && g < 80 && b < 80) {
+                    // فلتر أوسع: أي لون فيه نسبة حمراء أعلى من الخضراء والزرقاء
+                    if (r > 100 && r > g + 30 && r > b + 30) {
                         if (x < minX) minX = x;
                         if (x > maxX) maxX = x;
                         if (y < minY) minY = y;
@@ -284,7 +286,8 @@ public class OverlayService extends Service {
             }
 
             List<Player> list = new ArrayList<>();
-            if (found && (maxX - minX > 20) && (maxY - minY > 40)) {
+            // حجم مناسب للاعب
+            if (found && (maxX - minX > 30) && (maxY - minY > 50)) {
                 RectF box = new RectF(minX, minY, maxX, maxY);
                 float w = box.width();
                 float h = box.height();
