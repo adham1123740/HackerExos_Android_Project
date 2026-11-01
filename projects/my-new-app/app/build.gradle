@@ -26,7 +26,7 @@ android {
 }
 
 dependencies {
-    // مكتبات TensorFlow Lite الأساسية
+    // مكتبات TensorFlow Lite الأساسية (بدون GPU لضمان نجاح البناء)
     implementation 'org.tensorflow:tensorflow-lite:2.16.1'
-    implementation 'org.tensorflow:tensorflow-lite-gpu:2.16.1'
+    implementation 'org.tensorflow:tensorflow-lite-support:0.4.4'
 }
