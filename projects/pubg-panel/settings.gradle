@@ -12,5 +12,7 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "HackerExos_Android_Project"
+
+// هنا السر.. بنقوله إن المشروع الأساسي اسمه app
 include ':app'
+project(':app').projectDir = new File(rootDir, 'app')
