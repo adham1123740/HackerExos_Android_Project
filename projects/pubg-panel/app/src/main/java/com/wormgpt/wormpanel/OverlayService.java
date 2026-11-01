@@ -13,6 +13,7 @@ import android.graphics.Paint;
 import android.graphics.PixelFormat;
 import android.graphics.PorterDuff;
 import android.graphics.RectF;
+import android.graphics.drawable.GradientDrawable;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
 import android.media.Image;
@@ -25,9 +26,14 @@ import android.os.HandlerThread;
 import android.os.IBinder;
 import android.util.DisplayMetrics;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
+import android.view.View;
 import android.view.WindowManager;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -44,6 +50,11 @@ public class OverlayService extends Service {
     private SurfaceHolder holder;
     private WindowManager.LayoutParams lp;
 
+    private View floatingBox;
+    private View controlPanel;
+    private WindowManager.LayoutParams boxLp;
+    private WindowManager.LayoutParams panelLp;
+
     private MediaProjection mp;
     private ImageReader reader;
     private VirtualDisplay vd;
@@ -56,6 +67,7 @@ public class OverlayService extends Service {
 
     private volatile List<Player> players = new ArrayList<>();
     private volatile boolean busy = false;
+    private volatile boolean espEnabled = true;
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -77,6 +89,7 @@ public class OverlayService extends Service {
         mp = mpm.getMediaProjection(code, data);
 
         setupOverlay();
+        setupFloatingUI();
         startCapture();
         return START_STICKY;
     }
@@ -116,6 +129,93 @@ public class OverlayService extends Service {
         wm.addView(surface, lp);
     }
 
+    private void setupFloatingUI() {
+        // 1. المربع العائم
+        floatingBox = new TextView(this);
+        ((TextView) floatingBox).setText("HACK");
+        ((TextView) floatingBox).setTextColor(Color.GREEN);
+        ((TextView) floatingBox).setGravity(Gravity.CENTER);
+        ((TextView) floatingBox).setTextSize(14f);
+        
+        GradientDrawable gd = new GradientDrawable();
+        gd.setColor(Color.parseColor("#AA000000"));
+        gd.setStroke(3, Color.GREEN);
+        gd.setCornerRadius(20);
+        floatingBox.setBackground(gd);
+
+        boxLp = new WindowManager.LayoutParams(
+                120, 120,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                PixelFormat.TRANSLUCENT);
+        boxLp.gravity = Gravity.TOP | Gravity.START;
+        boxLp.x = 100; boxLp.y = 300;
+
+        floatingBox.setOnTouchListener(new DragTapListener(boxLp, floatingBox, () -> {
+            floatingBox.setVisibility(View.GONE);
+            controlPanel.setVisibility(View.VISIBLE);
+        }));
+        wm.addView(floatingBox, boxLp);
+
+        // 2. لوحة التحكم
+        LinearLayout ll = new LinearLayout(this);
+        ll.setOrientation(LinearLayout.VERTICAL);
+        ll.setPadding(30, 30, 30, 30);
+        GradientDrawable panelBg = new GradientDrawable();
+        panelBg.setColor(Color.parseColor("#DD111111"));
+        panelBg.setStroke(3, Color.GREEN);
+        panelBg.setCornerRadius(30);
+        ll.setBackground(panelBg);
+
+        // زرار X
+        TextView btnClose = new TextView(this);
+        btnClose.setText("X");
+        btnClose.setTextColor(Color.RED);
+        btnClose.setTextSize(20f);
+        btnClose.setGravity(Gravity.END);
+        ll.addView(btnClose);
+
+        // زرار ESP
+        Button btnEsp = new Button(this);
+        btnEsp.setText("ESP: ON");
+        btnEsp.setTextColor(Color.BLACK);
+        btnEsp.setBackgroundColor(Color.GREEN);
+        ll.addView(btnEsp);
+
+        controlPanel = ll;
+        controlPanel.setVisibility(View.GONE);
+
+        panelLp = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                PixelFormat.TRANSLUCENT);
+        panelLp.gravity = Gravity.TOP | Gravity.START;
+        panelLp.x = 100; panelLp.y = 450;
+
+        // سحب اللوحة
+        controlPanel.setOnTouchListener(new DragListener(panelLp, controlPanel));
+
+        // أحداث الأزرار
+        btnClose.setOnClickListener(v -> {
+            controlPanel.setVisibility(View.GONE);
+            floatingBox.setVisibility(View.VISIBLE);
+        });
+
+        btnEsp.setOnClickListener(v -> {
+            espEnabled = !espEnabled;
+            btnEsp.setText(espEnabled ? "ESP: ON" : "ESP: OFF");
+            btnEsp.setBackgroundColor(espEnabled ? Color.GREEN : Color.RED);
+            if (!espEnabled) {
+                players.clear();
+                draw();
+            }
+        });
+
+        wm.addView(controlPanel, panelLp);
+    }
+
     private void startCapture() {
         ht = new HandlerThread("cap");
         ht.start();
@@ -139,7 +239,7 @@ public class OverlayService extends Service {
             Image img = null;
             try {
                 img = r.acquireLatestImage();
-                if (img == null || busy) return;
+                if (img == null || busy || !espEnabled) return;
                 Image.Plane p = img.getPlanes()[0];
                 ByteBuffer buf = p.getBuffer();
                 int iw = img.getWidth();
@@ -172,7 +272,6 @@ public class OverlayService extends Service {
                     int g = (px >> 8) & 0xFF;
                     int b = px & 0xFF;
                     
-                    // فلتر اللون الأحمر (تقدر تغيره لأي لون)
                     if (r > 150 && g < 80 && b < 80) {
                         if (x < minX) minX = x;
                         if (x > maxX) maxX = x;
@@ -239,6 +338,8 @@ public class OverlayService extends Service {
     @Override
     public void onDestroy() {
         try { if (surface != null && wm != null) wm.removeView(surface); } catch (Exception ignored) {}
+        try { if (floatingBox != null && wm != null) wm.removeView(floatingBox); } catch (Exception ignored) {}
+        try { if (controlPanel != null && wm != null) wm.removeView(controlPanel); } catch (Exception ignored) {}
         try { if (vd != null) vd.release(); } catch (Exception ignored) {}
         try { if (reader != null) reader.close(); } catch (Exception ignored) {}
         try { if (mp != null) mp.stop(); } catch (Exception ignored) {}
@@ -254,6 +355,80 @@ public class OverlayService extends Service {
         final float headX, headY, chestX, chestY;
         Player(RectF b, float hx, float hy, float cx, float cy) {
             box = b; headX = hx; headY = hy; chestX = cx; chestY = cy;
+        }
+    }
+
+    // كلاس سحب المربع + النقر
+    private static class DragTapListener implements View.OnTouchListener {
+        private final WindowManager.LayoutParams lp;
+        private final View v;
+        private final Runnable onClick;
+        private int startX, startY;
+        private float touchX, touchY;
+        private long downAt;
+        private boolean dragging;
+
+        DragTapListener(WindowManager.LayoutParams lp, View v, Runnable onClick) {
+            this.lp = lp; this.v = v; this.onClick = onClick;
+        }
+
+        @Override public boolean onTouch(View view, MotionEvent e) {
+            switch (e.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    startX = lp.x; startY = lp.y;
+                    touchX = e.getRawX(); touchY = e.getRawY();
+                    downAt = System.currentTimeMillis();
+                    dragging = false;
+                    return true;
+                case MotionEvent.ACTION_MOVE:
+                    int dx = (int)(e.getRawX() - touchX);
+                    int dy = (int)(e.getRawY() - touchY);
+                    if (Math.abs(dx) > 8 || Math.abs(dy) > 8) dragging = true;
+                    if (dragging) {
+                        lp.x = startX + dx;
+                        lp.y = startY + dy;
+                        WindowManager wm = (WindowManager) v.getContext().getSystemService(Context.WINDOW_SERVICE);
+                        wm.updateViewLayout(v, lp);
+                    }
+                    return true;
+                case MotionEvent.ACTION_UP:
+                    long dur = System.currentTimeMillis() - downAt;
+                    if (!dragging && dur < 250) onClick.run();
+                    return true;
+            }
+            return false;
+        }
+    }
+
+    // كلاس سحب اللوحة
+    private static class DragListener implements View.OnTouchListener {
+        private final WindowManager.LayoutParams lp;
+        private final View v;
+        private int startX, startY;
+        private float touchX, touchY;
+
+        DragListener(WindowManager.LayoutParams lp, View v) {
+            this.lp = lp; this.v = v;
+        }
+
+        @Override public boolean onTouch(View view, MotionEvent e) {
+            switch (e.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    startX = lp.x; startY = lp.y;
+                    touchX = e.getRawX(); touchY = e.getRawY();
+                    return false;
+                case MotionEvent.ACTION_MOVE:
+                    int dx = (int)(e.getRawX() - touchX);
+                    int dy = (int)(e.getRawY() - touchY);
+                    if (Math.abs(dx) > 20 || Math.abs(dy) > 20) {
+                        lp.x = startX + dx;
+                        lp.y = startY + dy;
+                        WindowManager wm = (WindowManager) v.getContext().getSystemService(Context.WINDOW_SERVICE);
+                        wm.updateViewLayout(v, lp);
+                    }
+                    return true;
+            }
+            return false;
         }
     }
 }
