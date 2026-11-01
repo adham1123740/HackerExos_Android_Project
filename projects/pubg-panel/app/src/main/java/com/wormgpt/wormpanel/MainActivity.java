@@ -1,4 +1,4 @@
-package com.mahi.overlayesp;
+package com.wormgpt.wormpanel;
 
 import android.app.Activity;
 import android.app.AlertDialog;
@@ -14,7 +14,6 @@ import android.widget.Button;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
-import androidx.appcompat.app.AppCompatActivity;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -23,7 +22,7 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends Activity {
 
     private static final int REQ_OVERLAY = 100;
     private static final int REQ_CAPTURE = 200;
@@ -94,7 +93,6 @@ public class MainActivity extends AppCompatActivity {
         progress.setProgress(0);
         btnDownload.setEnabled(false);
         btnDownload.setText("جاري التنزيل…");
-
         new Thread(this::downloadWorker, "model-dl").start();
     }
 
