@@ -12,7 +12,8 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 
 public class MainActivity extends Activity {
 
@@ -36,7 +37,6 @@ public class MainActivity extends Activity {
         btnDownload = findViewById(R.id.btnDownload);
         btnStart = findViewById(R.id.btnStart);
 
-        // إخفاء زرار التنزيل وشريط التحميل لأننا حملنا الملف يدوياً
         btnDownload.setVisibility(View.GONE);
         progress.setVisibility(View.GONE);
 
@@ -45,13 +45,23 @@ public class MainActivity extends Activity {
     }
 
     private void checkModelFile() {
-        File modelFile = new File(new File(getFilesDir(), "models"), MODEL_NAME);
-        if (modelFile.exists()) {
-            statusText.setText("الحالة: الملف موجود، جاهز للتشغيل");
-            btnStart.setEnabled(true);
-            btnStart.setText("تفعيل ESP وفتح ببجي");
-        } else {
-            statusText.setText("الحالة: الملف غير موجود! ضعه في مجلد models");
+        try {
+            // بنفحص الملف اللي جوه الـ assets
+            InputStream is = getAssets().open(MODEL_NAME);
+            int size = is.available();
+            is.close();
+
+            if (size > 1_000_000) {
+                statusText.setText("الحالة: الملف موجود جوه التطبيق، جاهز للتشغيل");
+                btnStart.setEnabled(true);
+                btnStart.setText("تفعيل ESP وفتح ببجي");
+            } else {
+                statusText.setText("الحالة: الملف صغير جداً أو تالف");
+                btnStart.setEnabled(false);
+                btnStart.setText("الملف تالف");
+            }
+        } catch (IOException e) {
+            statusText.setText("الحالة: الملف غير موجود في مجلد assets");
             btnStart.setEnabled(false);
             btnStart.setText("الملف مفقود");
         }
