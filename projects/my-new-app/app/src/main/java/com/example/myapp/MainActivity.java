@@ -4,24 +4,17 @@ import android.app.Activity;
 import android.content.Intent;
 import android.media.projection.MediaProjectionManager;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.view.View;
 import android.widget.Button;
-import android.widget.ProgressBar;
-import android.widget.TextView;
 import android.widget.Toast;
 
 public class MainActivity extends Activity {
 
     private static final int REQ_OVERLAY = 100;
     private static final int REQ_CAPTURE = 200;
-
     private MediaProjectionManager mpm;
-    private TextView statusText;
-    private ProgressBar progress;
-    private Button btnDownload, btnStart;
 
     @Override
     protected void onCreate(Bundle s) {
@@ -29,17 +22,18 @@ public class MainActivity extends Activity {
         setContentView(R.layout.activity_main);
         mpm = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
 
-        statusText = findViewById(R.id.statusText);
-        progress = findViewById(R.id.progress);
-        btnDownload = findViewById(R.id.btnDownload);
-        btnStart = findViewById(R.id.btnStart);
+        Button btnDownload = findViewById(R.id.btnDownload);
+        Button btnStart = findViewById(R.id.btnStart);
+        android.widget.TextView statusText = findViewById(R.id.statusText);
+        android.widget.ProgressBar progress = findViewById(R.id.progress);
 
         btnDownload.setVisibility(View.GONE);
         progress.setVisibility(View.GONE);
-
+        
         statusText.setText("الحالة: جاهز للتشغيل");
         btnStart.setEnabled(true);
         btnStart.setText("تفعيل ESP");
+
         btnStart.setOnClickListener(v -> checkOverlay());
     }
 
@@ -64,7 +58,7 @@ public class MainActivity extends Activity {
                 svc.putExtra("code", res);
                 svc.putExtra("data", data);
                 startForegroundService(svc);
-                Toast.makeText(this, "تم تشغيل ESP، افتح ببجي الآن", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "تم تشغيل ESP! افتح ببجي الآن.", Toast.LENGTH_LONG).show();
                 finish();
             } else {
                 Toast.makeText(this, "تم رفض تصوير الشاشة", Toast.LENGTH_SHORT).show();
