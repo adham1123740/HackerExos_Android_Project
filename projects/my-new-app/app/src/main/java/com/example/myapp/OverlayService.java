@@ -36,14 +36,7 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
-import org.tensorflow.lite.Interpreter;
-
-import java.io.File;
-import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -52,7 +45,6 @@ public class OverlayService extends Service {
     public static final String ACTION_START = "com.example.myapp.START";
     private static final String CH = "esp_ch";
     private static final int CH_ID = 42;
-    private static final String MODEL_NAME = "yolov8n.tflite";
 
     private WindowManager wm;
     private SurfaceView surface;
@@ -67,9 +59,6 @@ public class OverlayService extends Service {
     private VirtualDisplay vd;
     private HandlerThread ht;
     private Handler handler;
-
-    private Interpreter interpreter;
-    private int inputSize = 640;
 
     private final Paint boxPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint headPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -91,13 +80,6 @@ public class OverlayService extends Service {
         }
 
         initPaints();
-        
-        try {
-            initInterpreter();
-        } catch (Exception e) {
-            stopSelf();
-            return START_NOT_STICKY;
-        }
 
         int code = intent.getIntExtra("code", 0);
         Intent data = intent.getParcelableExtra("data");
@@ -119,22 +101,6 @@ public class OverlayService extends Service {
         headPaint.setStyle(Paint.Style.FILL);
         chestPaint.setColor(Color.MAGENTA);
         chestPaint.setStyle(Paint.Style.FILL);
-    }
-
-    private void initInterpreter() throws Exception {
-        File model = new File(new File(getFilesDir(), "models"), MODEL_NAME);
-        if (!model.exists()) throw new Exception("Model missing");
-
-        Interpreter.Options opts = new Interpreter.Options();
-        opts.setNumThreads(4); // شغال على المعالج (CPU) بدل الـ GPU عشان نتجنب أخطاء البناء
-        
-        RandomAccessFile raf = new RandomAccessFile(model, "r");
-        FileChannel ch = raf.getChannel();
-        MappedByteBuffer mapped = ch.map(FileChannel.MapMode.READ_ONLY, 0, ch.size());
-        interpreter = new Interpreter(mapped, opts);
-        raf.close();
-        
-        inputSize = interpreter.getInputTensor(0).shape()[1];
     }
 
     private void setupOverlay() {
@@ -279,62 +245,44 @@ public class OverlayService extends Service {
 
     private void processFrame(Bitmap frame) {
         try {
-            Bitmap resized = Bitmap.createScaledBitmap(frame, inputSize, inputSize, true);
-            ByteBuffer in = ByteBuffer.allocateDirect(4 * inputSize * inputSize * 3).order(ByteOrder.nativeOrder());
-            int[] pixels = new int[inputSize * inputSize];
-            resized.getPixels(pixels, 0, inputSize, 0, 0, inputSize, inputSize);
-            for (int px : pixels) {
-                in.putFloat(((px >> 16) & 0xFF) / 255f);
-                in.putFloat(((px >> 8) & 0xFF) / 255f);
-                in.putFloat((px & 0xFF) / 255f);
-            }
-            in.rewind();
+            int width = frame.getWidth();
+            int height = frame.getHeight();
+            int[] pixels = new int[width * height];
+            frame.getPixels(pixels, 0, width, 0, 0, width, height);
 
-            int[] outShape = interpreter.getOutputTensor(0).shape();
-            int nC = outShape[1] - 4;
-            int nB = outShape[2];
-            float[][][] out = new float[1][outShape[1]][outShape[2]];
-            interpreter.run(in, out);
+            int minX = width, minY = height, maxX = 0, maxY = 0;
+            boolean found = false;
 
-            List<RectF> boxes = new ArrayList<>();
-            List<Float> scores = new ArrayList<>();
-            float sx = frame.getWidth() / (float) inputSize;
-            float sy = frame.getHeight() / (float) inputSize;
-
-            for (int i = 0; i < nB; i++) {
-                float best = 0f;
-                int bestC = -1;
-                for (int c = 0; c < nC; c++) {
-                    float s = out[0][4 + c][i];
-                    if (s > best) { best = s; bestC = c; }
+            // فلتر اللون الأحمر (تقدر تغيره لأي لون)
+            for (int y = 0; y < height; y += 10) {
+                for (int x = 0; x < width; x += 10) {
+                    int px = pixels[y * width + x];
+                    int r = (px >> 16) & 0xFF;
+                    int g = (px >> 8) & 0xFF;
+                    int b = px & 0xFF;
+                    
+                    if (r > 150 && g < 80 && b < 80) {
+                        if (x < minX) minX = x;
+                        if (x > maxX) maxX = x;
+                        if (y < minY) minY = y;
+                        if (y > maxY) maxY = y;
+                        found = true;
+                    }
                 }
-                if (bestC != 0 || best < 0.35f) continue;
-                float cx = out[0][0][i], cy = out[0][1][i];
-                float w = out[0][2][i], h = out[0][3][i];
-                boxes.add(new RectF((cx - w/2)*sx, (cy - h/2)*sy, (cx + w/2)*sx, (cy + h/2)*sy));
-                scores.add(best);
-            }
-            
-            List<RectF> kept = new ArrayList<>();
-            for (int i=0; i<boxes.size(); i++) {
-                boolean drop = false;
-                for (int j=0; j<kept.size(); j++) {
-                    float inter = Math.max(0, Math.min(boxes.get(i).right, kept.get(j).right) - Math.max(boxes.get(i).left, kept.get(j).left)) *
-                                  Math.max(0, Math.min(boxes.get(i).bottom, kept.get(j).bottom) - Math.max(boxes.get(i).top, kept.get(j).top));
-                    float ua = boxes.get(i).width()*boxes.get(i).height() + kept.get(j).width()*kept.get(j).height() - inter;
-                    if (inter / ua > 0.45f) { drop = true; break; }
-                }
-                if (!drop) kept.add(boxes.get(i));
             }
 
             List<Player> list = new ArrayList<>();
-            for (RectF b : kept) {
-                if (b.width() < 20 || b.height() < 40) continue;
-                float hx = b.left + b.width() * 0.5f;
-                float hy = b.top  + b.height() * 0.12f;
-                float chx = b.left + b.width() * 0.5f;
-                float chy = b.top  + b.height() * 0.30f;
-                list.add(new Player(b, hx, hy, chx, chy));
+            if (found && (maxX - minX > 20) && (maxY - minY > 40)) {
+                RectF box = new RectF(minX, minY, maxX, maxY);
+                float w = box.width();
+                float h = box.height();
+                
+                float hx = box.left + w * 0.5f;
+                float hy = box.top  + h * 0.12f;
+                float chx = box.left + w * 0.5f;
+                float chy = box.top  + h * 0.30f;
+                
+                list.add(new Player(box, hx, hy, chx, chy));
             }
             players = list;
             draw();
@@ -379,7 +327,6 @@ public class OverlayService extends Service {
         try { if (reader != null) reader.close(); } catch (Exception ignored) {}
         try { if (mp != null) mp.stop(); } catch (Exception ignored) {}
         try { if (ht != null) ht.quitSafely(); } catch (Exception ignored) {}
-        try { if (interpreter != null) interpreter.close(); } catch (Exception ignored) {}
         super.onDestroy();
     }
 
