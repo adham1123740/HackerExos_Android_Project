@@ -110,7 +110,6 @@ public class OverlayService extends Service {
         holder = surface.getHolder();
         holder.setFormat(PixelFormat.TRANSLUCENT);
         
-        // شفافية عشان تقدر تلعب وتلمس الشاشة عادي
         surface.setAlpha(0.01f); 
         holder.addCallback(new SurfaceHolder.Callback() {
             @Override public void surfaceCreated(SurfaceHolder h) { draw(); }
@@ -254,7 +253,6 @@ public class OverlayService extends Service {
             int minX = width, minY = height, maxX = 0, maxY = 0;
             boolean found = false;
 
-            // كشف لوني بسيط للأحمر (لتجربة المربع)
             for (int y = 0; y < height; y += 10) {
                 for (int x = 0; x < width; x += 10) {
                     int px = pixels[y * width + x];
