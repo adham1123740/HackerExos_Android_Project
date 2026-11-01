@@ -8,8 +8,6 @@ import android.os.Bundle;
 import android.provider.Settings;
 import android.view.View;
 import android.widget.Button;
-import android.widget.ProgressBar;
-import android.widget.TextView;
 import android.widget.Toast;
 
 public class MainActivity extends Activity {
@@ -26,8 +24,8 @@ public class MainActivity extends Activity {
 
         Button btnDownload = findViewById(R.id.btnDownload);
         Button btnStart = findViewById(R.id.btnStart);
-        TextView statusText = findViewById(R.id.statusText);
-        ProgressBar progress = findViewById(R.id.progress);
+        android.widget.TextView statusText = findViewById(R.id.statusText);
+        android.widget.ProgressBar progress = findViewById(R.id.progress);
 
         btnDownload.setVisibility(View.GONE);
         progress.setVisibility(View.GONE);
@@ -60,9 +58,8 @@ public class MainActivity extends Activity {
                 svc.putExtra("code", res);
                 svc.putExtra("data", data);
                 startForegroundService(svc);
-                
-                Toast.makeText(this, "تم تشغيل ESP! افتح ببجي الآن يدوياً.", Toast.LENGTH_LONG).show();
-                finish(); // نقفل الواجهة عشان نلعب
+                Toast.makeText(this, "تم تشغيل ESP! افتح ببجي الآن.", Toast.LENGTH_LONG).show();
+                finish();
             } else {
                 Toast.makeText(this, "تم رفض تصوير الشاشة", Toast.LENGTH_SHORT).show();
             }
