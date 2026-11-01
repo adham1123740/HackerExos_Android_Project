@@ -29,13 +29,6 @@ import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.WindowManager;
 
-import com.google.android.gms.tasks.OnSuccessListener;
-import com.google.mlkit.vision.common.InputImage;
-import com.google.mlkit.vision.objects.DetectedObject;
-import com.google.mlkit.vision.objects.ObjectDetection;
-import com.google.mlkit.vision.objects.ObjectDetector;
-import com.google.mlkit.vision.objects.defaults.ObjectDetectorOptions;
-
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
@@ -57,10 +50,10 @@ public class OverlayService extends Service {
     private HandlerThread ht;
     private Handler handler;
 
-    private ObjectDetector detector;
     private final Paint boxPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint headPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint chestPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
     private volatile List<Player> players = new ArrayList<>();
     private volatile boolean busy = false;
 
@@ -76,7 +69,6 @@ public class OverlayService extends Service {
         }
 
         initPaints();
-        initMLKit();
 
         int code = intent.getIntExtra("code", 0);
         Intent data = intent.getParcelableExtra("data");
@@ -97,15 +89,6 @@ public class OverlayService extends Service {
         headPaint.setStyle(Paint.Style.FILL);
         chestPaint.setColor(Color.MAGENTA);
         chestPaint.setStyle(Paint.Style.FILL);
-    }
-
-    private void initMLKit() {
-        ObjectDetectorOptions options = new ObjectDetectorOptions.Builder()
-                .setDetectorMode(ObjectDetectorOptions.STREAM_MODE)
-                .enableMultipleObjects()
-                .enableClassification()
-                .build();
-        detector = ObjectDetection.getClient(options);
     }
 
     private void setupOverlay() {
@@ -173,32 +156,52 @@ public class OverlayService extends Service {
     }
 
     private void processFrame(Bitmap frame) {
-        InputImage image = InputImage.fromBitmap(frame, 0);
-        detector.process(image)
-                .addOnSuccessListener(new OnSuccessListener<List<DetectedObject>>() {
-                    @Override
-                    public void onSuccess(List<DetectedObject> objects) {
-                        List<Player> list = new ArrayList<>();
-                        for (DetectedObject obj : objects) {
-                            RectF boundingBox = new RectF(obj.getBoundingBox());
-                            float w = boundingBox.width();
-                            float h = boundingBox.height();
-                            
-                            if (w < 20 || h < 40) continue; // فلتر للضوضاء
-                            
-                            float hx = boundingBox.left + w * 0.5f;
-                            float hy = boundingBox.top  + h * 0.12f;
-                            float chx = boundingBox.left + w * 0.5f;
-                            float chy = boundingBox.top  + h * 0.30f;
-                            
-                            list.add(new Player(boundingBox, hx, hy, chx, chy));
-                        }
-                        players = list;
-                        draw();
-                        busy = false;
+        try {
+            int width = frame.getWidth();
+            int height = frame.getHeight();
+            int[] pixels = new int[width * height];
+            frame.getPixels(pixels, 0, width, 0, 0, width, height);
+
+            int minX = width, minY = height, maxX = 0, maxY = 0;
+            boolean found = false;
+
+            for (int y = 0; y < height; y += 10) {
+                for (int x = 0; x < width; x += 10) {
+                    int px = pixels[y * width + x];
+                    int r = (px >> 16) & 0xFF;
+                    int g = (px >> 8) & 0xFF;
+                    int b = px & 0xFF;
+                    
+                    // فلتر اللون الأحمر (تقدر تغيره لأي لون)
+                    if (r > 150 && g < 80 && b < 80) {
+                        if (x < minX) minX = x;
+                        if (x > maxX) maxX = x;
+                        if (y < minY) minY = y;
+                        if (y > maxY) maxY = y;
+                        found = true;
                     }
-                })
-                .addOnFailureListener(e -> busy = false);
+                }
+            }
+
+            List<Player> list = new ArrayList<>();
+            if (found && (maxX - minX > 20) && (maxY - minY > 40)) {
+                RectF box = new RectF(minX, minY, maxX, maxY);
+                float w = box.width();
+                float h = box.height();
+                
+                float hx = box.left + w * 0.5f;
+                float hy = box.top  + h * 0.12f;
+                float chx = box.left + w * 0.5f;
+                float chy = box.top  + h * 0.30f;
+                
+                list.add(new Player(box, hx, hy, chx, chy));
+            }
+            players = list;
+            draw();
+        } catch (Exception ignored) {
+        } finally {
+            busy = false;
+        }
     }
 
     private void draw() {
@@ -240,7 +243,6 @@ public class OverlayService extends Service {
         try { if (reader != null) reader.close(); } catch (Exception ignored) {}
         try { if (mp != null) mp.stop(); } catch (Exception ignored) {}
         try { if (ht != null) ht.quitSafely(); } catch (Exception ignored) {}
-        try { if (detector != null) detector.close(); } catch (Exception ignored) {}
         super.onDestroy();
     }
 
