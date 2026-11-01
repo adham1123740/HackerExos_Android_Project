@@ -111,6 +111,9 @@ public class OverlayService extends Service {
         surface.setZOrderOnTop(true);
         holder = surface.getHolder();
         holder.setFormat(PixelFormat.TRANSLUCENT);
+        
+        // تأكد إن الطبقة دي شفافة ومش بتاخد لمس
+        surface.setAlpha(0.01f); // شفافية عالية جداً عشان النظام ميعتبرهاش حاجب
         holder.addCallback(new SurfaceHolder.Callback() {
             @Override public void surfaceCreated(SurfaceHolder h) { draw(); }
             @Override public void surfaceChanged(SurfaceHolder h, int f, int w, int hh) {}
@@ -121,6 +124,7 @@ public class OverlayService extends Service {
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                // دي أهم فلاجين: مش بتاخد لمس + مش بتعمل تركيز
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                         | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
                         | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
@@ -168,7 +172,6 @@ public class OverlayService extends Service {
         panelBg.setCornerRadius(30);
         ll.setBackground(panelBg);
 
-        // زرار X
         TextView btnClose = new TextView(this);
         btnClose.setText("X");
         btnClose.setTextColor(Color.RED);
@@ -176,7 +179,6 @@ public class OverlayService extends Service {
         btnClose.setGravity(Gravity.END);
         ll.addView(btnClose);
 
-        // زرار ESP
         Button btnEsp = new Button(this);
         btnEsp.setText("ESP: ON");
         btnEsp.setTextColor(Color.BLACK);
@@ -195,10 +197,8 @@ public class OverlayService extends Service {
         panelLp.gravity = Gravity.TOP | Gravity.START;
         panelLp.x = 100; panelLp.y = 450;
 
-        // سحب اللوحة
         controlPanel.setOnTouchListener(new DragListener(panelLp, controlPanel));
 
-        // أحداث الأزرار
         btnClose.setOnClickListener(v -> {
             controlPanel.setVisibility(View.GONE);
             floatingBox.setVisibility(View.VISIBLE);
@@ -359,7 +359,6 @@ public class OverlayService extends Service {
         }
     }
 
-    // كلاس سحب المربع + النقر
     private static class DragTapListener implements View.OnTouchListener {
         private final WindowManager.LayoutParams lp;
         private final View v;
@@ -401,7 +400,6 @@ public class OverlayService extends Service {
         }
     }
 
-    // كلاس سحب اللوحة
     private static class DragListener implements View.OnTouchListener {
         private final WindowManager.LayoutParams lp;
         private final View v;
