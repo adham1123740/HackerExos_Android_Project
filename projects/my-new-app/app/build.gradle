@@ -1,6 +1,4 @@
-plugins {
-    id 'com.android.application'
-}
+apply plugin: 'com.android.application'
 
 android {
     namespace 'com.example.myapp'
@@ -17,7 +15,6 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
-    
     aaptOptions {
         noCompress "tflite"
     }
