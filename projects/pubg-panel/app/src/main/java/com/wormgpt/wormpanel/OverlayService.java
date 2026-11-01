@@ -1,10 +1,9 @@
-package com.mahi.overlayesp;
+package com.wormgpt.wormpanel;
 
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.Service;
-import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
 import android.graphics.Bitmap;
@@ -37,6 +36,7 @@ import org.tensorflow.lite.gpu.GpuDelegate;
 import java.io.File;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
@@ -44,7 +44,7 @@ import java.util.List;
 
 public class OverlayService extends Service {
 
-    public static final String ACTION_START = "com.mahi.overlayesp.START";
+    public static final String ACTION_START = "com.wormgpt.wormpanel.START";
     private static final String CH = "esp_ch";
     private static final int CH_ID = 42;
     private static final String MODEL_NAME = "yolov8n.tflite";
@@ -67,7 +67,6 @@ public class OverlayService extends Service {
     private final Paint boxPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint headPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint chestPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     private volatile List<Player> players = new ArrayList<>();
     private volatile boolean busy = false;
@@ -111,9 +110,6 @@ public class OverlayService extends Service {
         headPaint.setStyle(Paint.Style.FILL);
         chestPaint.setColor(Color.MAGENTA);
         chestPaint.setStyle(Paint.Style.FILL);
-        textPaint.setColor(Color.WHITE);
-        textPaint.setTextSize(26f);
-        textPaint.setFakeBoldText(true);
     }
 
     private void initInterpreter() throws Exception {
@@ -134,10 +130,9 @@ public class OverlayService extends Service {
         interpreter = new Interpreter(mapped, opts);
         raf.close();
 
-        int[] shape = interpreter.getOutputTensor(0).shape(); // [1,84,8400]
-        if (shape.length == 3 && shape[1] < shape[2]) {
+        try {
             inputSize = interpreter.getInputTensor(0).shape()[1];
-        }
+        } catch (Exception ignored) {}
     }
 
     private void setupOverlay() {
@@ -208,7 +203,7 @@ public class OverlayService extends Service {
         try {
             Bitmap resized = Bitmap.createScaledBitmap(frame, inputSize, inputSize, true);
             ByteBuffer in = ByteBuffer.allocateDirect(4 * inputSize * inputSize * 3);
-            in.order(java.nio.ByteOrder.nativeOrder());
+            in.order(ByteOrder.nativeOrder());
             int[] pixels = new int[inputSize * inputSize];
             resized.getPixels(pixels, 0, inputSize, 0, 0, inputSize, inputSize);
             for (int px : pixels) {
@@ -218,7 +213,7 @@ public class OverlayService extends Service {
             }
             in.rewind();
 
-            int[] outShape = interpreter.getOutputTensor(0).shape(); // [1,84,8400]
+            int[] outShape = interpreter.getOutputTensor(0).shape();
             int nC = outShape[1] - 4;
             int nB = outShape[2];
             float[][][] out = new float[1][outShape[1]][outShape[2]];
