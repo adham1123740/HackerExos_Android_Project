@@ -1,19 +1,32 @@
-plugins { id 'com.android.application' }
+plugins {
+    id 'com.android.application'
+}
+
 android {
     namespace 'com.example.myapp'
     compileSdk 35
+
     defaultConfig {
-        applicationId 'com.example.myapp'
-        minSdk 23
+        applicationId "com.example.myapp"
+        minSdk 26
         targetSdk 35
         versionCode 1
-        versionName '1.0'
+        versionName "1.0"
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    // السطر ده مهم جداً عشان ملف الـ YOLO يتقرأ من غير ضغط
+    aaptOptions {
+        noCompress "tflite"
     }
 }
+
 dependencies {
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.9.0'
-    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-    implementation 'com.squareup.retrofit2:retrofit:2.9.0'
-    implementation 'com.squareup.retrofit2:converter-gson:2.9.0'
+    // مكتبات TensorFlow Lite الأساسية
+    implementation 'org.tensorflow:tensorflow-lite:2.16.1'
+    implementation 'org.tensorflow:tensorflow-lite-gpu:2.16.1'
 }
