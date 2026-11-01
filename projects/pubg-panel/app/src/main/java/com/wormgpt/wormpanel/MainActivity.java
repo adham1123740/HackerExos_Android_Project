@@ -65,6 +65,7 @@ public class MainActivity extends Activity {
                 svc.putExtra("data", data);
                 startForegroundService(svc);
                 
+                // فتح ببجي
                 openPubg();
                 
                 finish();
@@ -78,7 +79,8 @@ public class MainActivity extends Activity {
         String[] packages = {
                 "com.tencent.ig",      // ببجي العالمية
                 "com.pubg.krmobile",  // ببجي الكورية
-                "com.rekoo.pubgm"     // ببجي التايوانية
+                "com.rekoo.pubgm",    // ببجي التايوانية
+                "com.vng.pubgmobile"  // ببجي الفيتنامية
         };
         
         for (String pkg : packages) {
