@@ -6,6 +6,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- عشان نعرف نفتح ببجي -->
+    <queries>
+        <package android:name="com.tencent.ig" />
+        <package android:name="com.pubg.krmobile" />
+        <package android:name="com.rekoo.pubgm" />
+    </queries>
+
     <application
         android:allowBackup="false"
         android:label="Overlay ESP"
