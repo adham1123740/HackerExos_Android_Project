@@ -5,8 +5,6 @@ import android.content.Intent;
 import android.media.projection.MediaProjectionManager;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.provider.Settings;
 import android.view.View;
 import android.widget.Button;
@@ -15,25 +13,17 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 
 public class MainActivity extends Activity {
 
     private static final int REQ_OVERLAY = 100;
     private static final int REQ_CAPTURE = 200;
-    // رابط أسرع ومش بيتحجب زي جيت هاب
-    private static final String MODEL_URL = "https://huggingface.co/Ultralytics/YOLOv8/resolve/main/yolov8n.tflite";
     private static final String MODEL_NAME = "yolov8n.tflite";
 
     private MediaProjectionManager mpm;
     private TextView statusText;
     private ProgressBar progress;
     private Button btnDownload, btnStart;
-    private final Handler ui = new Handler(Looper.getMainLooper());
-    private volatile boolean downloading = false;
 
     @Override
     protected void onCreate(Bundle s) {
@@ -46,97 +36,25 @@ public class MainActivity extends Activity {
         btnDownload = findViewById(R.id.btnDownload);
         btnStart = findViewById(R.id.btnStart);
 
-        btnDownload.setOnClickListener(v -> startDownload());
+        // إخفاء زرار التنزيل وشريط التحميل لأننا حملنا الملف يدوياً
+        btnDownload.setVisibility(View.GONE);
+        progress.setVisibility(View.GONE);
+
+        checkModelFile();
         btnStart.setOnClickListener(v -> checkOverlay());
-
-        refreshModelState();
     }
 
-    private File modelFile() {
-        File dir = new File(getFilesDir(), "models");
-        if (!dir.exists()) dir.mkdirs();
-        return new File(dir, MODEL_NAME);
-    }
-
-    private boolean modelReady() {
-        File f = modelFile();
-        return f.exists() && f.length() > 1_000_000;
-    }
-
-    private void refreshModelState() {
-        if (modelReady()) {
-            statusText.setText("الحالة: YOLO موجود وجاهز");
-            btnDownload.setEnabled(false);
-            btnDownload.setText("YOLO موجود ✓");
+    private void checkModelFile() {
+        File modelFile = new File(new File(getFilesDir(), "models"), MODEL_NAME);
+        if (modelFile.exists()) {
+            statusText.setText("الحالة: الملف موجود، جاهز للتشغيل");
             btnStart.setEnabled(true);
             btnStart.setText("تفعيل ESP وفتح ببجي");
         } else {
-            statusText.setText("الحالة: قم بتنزيل YOLO أولاً");
-            btnDownload.setEnabled(true);
-            btnDownload.setText("تنزيل YOLO");
+            statusText.setText("الحالة: الملف غير موجود! ضعه في مجلد models");
             btnStart.setEnabled(false);
-            btnStart.setText("انتظر التنزيل...");
+            btnStart.setText("الملف مفقود");
         }
-    }
-
-    private void startDownload() {
-        if (downloading || modelReady()) return;
-        downloading = true;
-        progress.setVisibility(View.VISIBLE);
-        progress.setProgress(0);
-        btnDownload.setEnabled(false);
-        btnDownload.setText("جاري التنزيل...");
-
-        new Thread(() -> {
-            HttpURLConnection conn = null;
-            try {
-                File target = modelFile();
-                File tmp = new File(target.getAbsolutePath() + ".part");
-                URL u = new URL(MODEL_URL);
-                conn = (HttpURLConnection) u.openConnection();
-                conn.setInstanceFollowRedirects(true);
-                conn.setConnectTimeout(15000);
-                conn.setReadTimeout(15000);
-                conn.connect();
-
-                long total = conn.getContentLengthLong();
-                InputStream in = conn.getInputStream();
-                FileOutputStream out = new FileOutputStream(tmp);
-
-                byte[] buf = new byte[64 * 1024];
-                long read = 0; int n, lastPct = -1;
-                while ((n = in.read(buf)) != -1) {
-                    out.write(buf, 0, n);
-                    read += n;
-                    if (total > 0) {
-                        int pct = (int)(read * 100 / total);
-                        if (pct != lastPct) {
-                            lastPct = pct;
-                            ui.post(() -> progress.setProgress(pct));
-                        }
-                    }
-                }
-                out.close(); in.close();
-                
-                if (target.exists()) target.delete();
-                tmp.renameTo(target);
-
-                ui.post(() -> {
-                    downloading = false;
-                    progress.setVisibility(View.GONE);
-                    refreshModelState();
-                    Toast.makeText(this, "تم التنزيل بنجاح", Toast.LENGTH_SHORT).show();
-                });
-            } catch (Exception e) {
-                final String errorMsg = e.getMessage() != null ? e.getMessage() : e.toString();
-                ui.post(() -> {
-                    downloading = false;
-                    progress.setVisibility(View.GONE);
-                    refreshModelState();
-                    Toast.makeText(this, "فشل: " + errorMsg, Toast.LENGTH_LONG).show();
-                });
-            }
-        }).start();
     }
 
     private void checkOverlay() {
