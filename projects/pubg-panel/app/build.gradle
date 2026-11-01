@@ -1,6 +1,39 @@
-plugins { id 'com.android.application' }
+plugins {
+    id 'com.android.application' version '8.7.3'
+}
+
 android {
     namespace 'com.wormgpt.wormpanel'
     compileSdk 35
-    defaultConfig { applicationId 'com.wormgpt.wormpanel'; minSdk 23; targetSdk 28; versionCode 1; versionName '1.0' }
+
+    defaultConfig {
+        applicationId "com.wormgpt.wormpanel"
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName "1.0"
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    // ده اللي هيحل مشكلة Input file does not exist
+    sourceSets {
+        main {
+            manifest.srcFile 'src/main/AndroidManifest.xml'
+            java.srcDirs = ['src/main/java']
+            res.srcDirs = ['src/main/res']
+        }
+    }
+
+    aaptOptions {
+        noCompress "tflite"
+    }
+}
+
+dependencies {
+    implementation 'org.tensorflow:tensorflow-lite:2.16.1'
+    implementation 'org.tensorflow:tensorflow-lite-gpu:2.16.1'
 }
