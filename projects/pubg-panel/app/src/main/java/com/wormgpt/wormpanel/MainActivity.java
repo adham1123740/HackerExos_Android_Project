@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.content.Intent;
 import android.media.projection.MediaProjectionManager;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.view.View;
@@ -65,9 +64,7 @@ public class MainActivity extends Activity {
                 svc.putExtra("code", res);
                 svc.putExtra("data", data);
                 startForegroundService(svc);
-                Toast.makeText(this, "جاري فتح ببجي...", Toast.LENGTH_SHORT).show();
                 
-                // فتح ببجي تلقائي
                 openPubg();
                 
                 finish();
@@ -78,27 +75,21 @@ public class MainActivity extends Activity {
     }
 
     private void openPubg() {
-        try {
-            Intent intent = new Intent(Intent.ACTION_MAIN);
-            intent.setPackage("com.tencent.ig"); // ببجي العالمية
-            intent.addCategory(Intent.CATEGORY_LAUNCHER);
-            startActivity(intent);
-        } catch (Exception e) {
-            try {
-                Intent intent = new Intent(Intent.ACTION_MAIN);
-                intent.setPackage("com.pubg.krmobile"); // ببجي الكورية
-                intent.addCategory(Intent.CATEGORY_LAUNCHER);
-                startActivity(intent);
-            } catch (Exception e2) {
-                try {
-                    Intent intent = new Intent(Intent.ACTION_MAIN);
-                    intent.setPackage("com.rekoo.pubgm"); // ببجي تايوان
-                    intent.addCategory(Intent.CATEGORY_LAUNCHER);
-                    startActivity(intent);
-                } catch (Exception e3) {
-                    Toast.makeText(this, "لم يتم العثور على ببجي، افتحها يدوياً", Toast.LENGTH_SHORT).show();
-                }
+        String[] packages = {
+                "com.tencent.ig",      // ببجي العالمية
+                "com.pubg.krmobile",  // ببجي الكورية
+                "com.rekoo.pubgm"     // ببجي التايوانية
+        };
+        
+        for (String pkg : packages) {
+            Intent launchIntent = getPackageManager().getLaunchIntentForPackage(pkg);
+            if (launchIntent != null) {
+                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(launchIntent);
+                return;
             }
         }
+        
+        Toast.makeText(this, "لم يتم العثور على ببجي، افتحها يدوياً", Toast.LENGTH_LONG).show();
     }
 }
