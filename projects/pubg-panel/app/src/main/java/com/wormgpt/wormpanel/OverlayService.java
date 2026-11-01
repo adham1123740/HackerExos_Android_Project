@@ -36,7 +36,16 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import org.tensorflow.lite.Interpreter;
+import org.tensorflow.lite.gpu.CompatibilityList;
+import org.tensorflow.lite.gpu.GpuDelegate;
+
+import java.io.File;
+import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -45,22 +54,25 @@ public class OverlayService extends Service {
     public static final String ACTION_START = "com.wormgpt.wormpanel.START";
     private static final String CH = "esp_ch";
     private static final int CH_ID = 42;
+    private static final String MODEL_NAME = "yolov8n.tflite";
 
     private WindowManager wm;
     private SurfaceView surface;
     private SurfaceHolder holder;
     private WindowManager.LayoutParams lp;
 
-    private View floatingBox;
-    private View controlPanel;
-    private WindowManager.LayoutParams boxLp;
-    private WindowManager.LayoutParams panelLp;
+    private View floatingBox, controlPanel;
+    private WindowManager.LayoutParams boxLp, panelLp;
 
     private MediaProjection mp;
     private ImageReader reader;
     private VirtualDisplay vd;
     private HandlerThread ht;
     private Handler handler;
+
+    private Interpreter interpreter;
+    private GpuDelegate gpuDelegate;
+    private int inputSize = 640;
 
     private final Paint boxPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint headPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -82,6 +94,13 @@ public class OverlayService extends Service {
         }
 
         initPaints();
+        
+        try {
+            initInterpreter();
+        } catch (Exception e) {
+            stopSelf();
+            return START_NOT_STICKY;
+        }
 
         int code = intent.getIntExtra("code", 0);
         Intent data = intent.getParcelableExtra("data");
@@ -105,6 +124,28 @@ public class OverlayService extends Service {
         chestPaint.setStyle(Paint.Style.FILL);
     }
 
+    private void initInterpreter() throws Exception {
+        File model = new File(new File(getFilesDir(), "models"), MODEL_NAME);
+        if (!model.exists()) throw new Exception("Model missing");
+
+        Interpreter.Options opts = new Interpreter.Options();
+        CompatibilityList compat = new CompatibilityList();
+        if (compat.isDelegateSupportedOnThisDevice()) {
+            gpuDelegate = new GpuDelegate(compat.getBestOptionsForThisDevice());
+            opts.addDelegate(gpuDelegate);
+        } else {
+            opts.setNumThreads(4);
+        }
+        
+        RandomAccessFile raf = new RandomAccessFile(model, "r");
+        FileChannel ch = raf.getChannel();
+        MappedByteBuffer mapped = ch.map(FileChannel.MapMode.READ_ONLY, 0, ch.size());
+        interpreter = new Interpreter(mapped, opts);
+        raf.close();
+        
+        inputSize = interpreter.getInputTensor(0).shape()[1];
+    }
+
     private void setupOverlay() {
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
         surface = new SurfaceView(this);
@@ -112,8 +153,7 @@ public class OverlayService extends Service {
         holder = surface.getHolder();
         holder.setFormat(PixelFormat.TRANSLUCENT);
         
-        // --- حل مشكلة اللمس ---
-        // خلي الطبقة دي خفية تماماً ومتاخدش لمس
+        // شفافية عالية جداً عشان اللعبة تستقبل اللمس
         surface.setAlpha(0.01f); 
         holder.addCallback(new SurfaceHolder.Callback() {
             @Override public void surfaceCreated(SurfaceHolder h) { draw(); }
@@ -125,7 +165,6 @@ public class OverlayService extends Service {
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                // FLAG_NOT_TOUCHABLE بيمنع الطبقة دي من سحب أي لمسات
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                         | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
                         | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
@@ -223,15 +262,11 @@ public class OverlayService extends Service {
 
         DisplayMetrics m = new DisplayMetrics();
         wm.getDefaultDisplay().getRealMetrics(m);
-        int srcW = m.widthPixels;
-        int srcH = m.heightPixels;
-        int density = m.densityDpi;
-
         int w = 1280;
-        int h = (int)((long) srcH * w / srcW);
+        int h = (int)((long) m.heightPixels * w / m.widthPixels);
 
         reader = ImageReader.newInstance(w, h, PixelFormat.RGBA_8888, 3);
-        vd = mp.createVirtualDisplay("esp", w, h, density,
+        vd = mp.createVirtualDisplay("esp", w, h, m.densityDpi,
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                 reader.getSurface(), null, handler);
 
@@ -240,11 +275,8 @@ public class OverlayService extends Service {
             try {
                 img = r.acquireLatestImage();
                 if (img == null || busy || !espEnabled) return;
-                Image.Plane p = img.getPlanes()[0];
-                ByteBuffer buf = p.getBuffer();
-                int iw = img.getWidth();
-                int ih = img.getHeight();
-                Bitmap bmp = Bitmap.createBitmap(iw, ih, Bitmap.Config.ARGB_8888);
+                ByteBuffer buf = img.getPlanes()[0].getBuffer();
+                Bitmap bmp = Bitmap.createBitmap(img.getWidth(), img.getHeight(), Bitmap.Config.ARGB_8888);
                 bmp.copyPixelsFromBuffer(buf);
                 busy = true;
                 processFrame(bmp);
@@ -257,47 +289,63 @@ public class OverlayService extends Service {
 
     private void processFrame(Bitmap frame) {
         try {
-            int width = frame.getWidth();
-            int height = frame.getHeight();
-            int[] pixels = new int[width * height];
-            frame.getPixels(pixels, 0, width, 0, 0, width, height);
+            Bitmap resized = Bitmap.createScaledBitmap(frame, inputSize, inputSize, true);
+            ByteBuffer in = ByteBuffer.allocateDirect(4 * inputSize * inputSize * 3).order(ByteOrder.nativeOrder());
+            int[] pixels = new int[inputSize * inputSize];
+            resized.getPixels(pixels, 0, inputSize, 0, 0, inputSize, inputSize);
+            for (int px : pixels) {
+                in.putFloat(((px >> 16) & 0xFF) / 255f);
+                in.putFloat(((px >> 8) & 0xFF) / 255f);
+                in.putFloat((px & 0xFF) / 255f);
+            }
+            in.rewind();
 
-            int minX = width, minY = height, maxX = 0, maxY = 0;
-            boolean found = false;
+            int[] outShape = interpreter.getOutputTensor(0).shape();
+            int nC = outShape[1] - 4;
+            int nB = outShape[2];
+            float[][][] out = new float[1][outShape[1]][outShape[2]];
+            interpreter.run(in, out);
 
-            // --- توسيع نطاق الكشف اللوني ---
-            // بدل ما كنا بندور على الأحمر بس، هندور على أي لون دافئ (بني، برتقالي، جلدي)
-            for (int y = 0; y < height; y += 10) {
-                for (int x = 0; x < width; x += 10) {
-                    int px = pixels[y * width + x];
-                    int r = (px >> 16) & 0xFF;
-                    int g = (px >> 8) & 0xFF;
-                    int b = px & 0xFF;
-                    
-                    // فلتر أوسع: أي لون فيه نسبة حمراء أعلى من الخضراء والزرقاء
-                    if (r > 100 && r > g + 30 && r > b + 30) {
-                        if (x < minX) minX = x;
-                        if (x > maxX) maxX = x;
-                        if (y < minY) minY = y;
-                        if (y > maxY) maxY = y;
-                        found = true;
-                    }
+            List<RectF> boxes = new ArrayList<>();
+            List<Float> scores = new ArrayList<>();
+            float sx = frame.getWidth() / (float) inputSize;
+            float sy = frame.getHeight() / (float) inputSize;
+
+            for (int i = 0; i < nB; i++) {
+                float best = 0f;
+                int bestC = -1;
+                for (int c = 0; c < nC; c++) {
+                    float s = out[0][4 + c][i];
+                    if (s > best) { best = s; bestC = c; }
                 }
+                if (bestC != 0 || best < 0.35f) continue; // فلتر الشخص فقط
+                float cx = out[0][0][i], cy = out[0][1][i];
+                float w = out[0][2][i], h = out[0][3][i];
+                boxes.add(new RectF((cx - w/2)*sx, (cy - h/2)*sy, (cx + w/2)*sx, (cy + h/2)*sy));
+                scores.add(best);
+            }
+            
+            // إزالة التداخل (NMS)
+            List<RectF> kept = new ArrayList<>();
+            for (int i=0; i<boxes.size(); i++) {
+                boolean drop = false;
+                for (int j=0; j<kept.size(); j++) {
+                    float inter = Math.max(0, Math.min(boxes.get(i).right, kept.get(j).right) - Math.max(boxes.get(i).left, kept.get(j).left)) *
+                                  Math.max(0, Math.min(boxes.get(i).bottom, kept.get(j).bottom) - Math.max(boxes.get(i).top, kept.get(j).top));
+                    float ua = boxes.get(i).width()*boxes.get(i).height() + kept.get(j).width()*kept.get(j).height() - inter;
+                    if (inter / ua > 0.45f) { drop = true; break; }
+                }
+                if (!drop) kept.add(boxes.get(i));
             }
 
             List<Player> list = new ArrayList<>();
-            // حجم مناسب للاعب
-            if (found && (maxX - minX > 30) && (maxY - minY > 50)) {
-                RectF box = new RectF(minX, minY, maxX, maxY);
-                float w = box.width();
-                float h = box.height();
-                
-                float hx = box.left + w * 0.5f;
-                float hy = box.top  + h * 0.12f;
-                float chx = box.left + w * 0.5f;
-                float chy = box.top  + h * 0.30f;
-                
-                list.add(new Player(box, hx, hy, chx, chy));
+            for (RectF b : kept) {
+                if (b.width() < 20 || b.height() < 40) continue;
+                float hx = b.left + b.width() * 0.5f;
+                float hy = b.top  + b.height() * 0.12f;
+                float chx = b.left + b.width() * 0.5f;
+                float chy = b.top  + b.height() * 0.30f;
+                list.add(new Player(b, hx, hy, chx, chy));
             }
             players = list;
             draw();
@@ -328,15 +376,9 @@ public class OverlayService extends Service {
     private Notification buildNotification() {
         NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (Build.VERSION.SDK_INT >= 26) {
-            NotificationChannel ch = new NotificationChannel(
-                    CH, "Overlay", NotificationManager.IMPORTANCE_LOW);
-            nm.createNotificationChannel(ch);
+            nm.createNotificationChannel(new NotificationChannel(CH, "Overlay", NotificationManager.IMPORTANCE_LOW));
         }
-        return new Notification.Builder(this, CH)
-                .setContentTitle("Overlay ESP")
-                .setContentText("ESP يعمل")
-                .setSmallIcon(android.R.drawable.ic_menu_view)
-                .build();
+        return new Notification.Builder(this, CH).setContentTitle("Overlay ESP").setSmallIcon(android.R.drawable.ic_menu_view).build();
     }
 
     @Override
@@ -348,6 +390,8 @@ public class OverlayService extends Service {
         try { if (reader != null) reader.close(); } catch (Exception ignored) {}
         try { if (mp != null) mp.stop(); } catch (Exception ignored) {}
         try { if (ht != null) ht.quitSafely(); } catch (Exception ignored) {}
+        try { if (interpreter != null) interpreter.close(); } catch (Exception ignored) {}
+        try { if (gpuDelegate != null) gpuDelegate.close(); } catch (Exception ignored) {}
         super.onDestroy();
     }
 
@@ -395,8 +439,7 @@ public class OverlayService extends Service {
                     }
                     return true;
                 case MotionEvent.ACTION_UP:
-                    long dur = System.currentTimeMillis() - downAt;
-                    if (!dragging && dur < 250) onClick.run();
+                    if (!dragging && System.currentTimeMillis() - downAt < 250) onClick.run();
                     return true;
             }
             return false;
