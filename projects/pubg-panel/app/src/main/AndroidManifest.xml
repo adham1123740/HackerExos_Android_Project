@@ -28,4 +28,5 @@
         
         <service android:name=".OverlayService" android:exported="false" android:foregroundServiceType="mediaProjection"/>
     </application>
-</manifest>
+
+    
