@@ -1,7 +1,6 @@
 package com.example.myapp;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.content.Intent;
 import android.media.projection.MediaProjectionManager;
 import android.net.Uri;
@@ -25,7 +24,8 @@ public class MainActivity extends Activity {
 
     private static final int REQ_OVERLAY = 100;
     private static final int REQ_CAPTURE = 200;
-    private static final String MODEL_URL = "https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8n.tflite";
+    // رابط أسرع ومش بيتحجب زي جيت هاب
+    private static final String MODEL_URL = "https://huggingface.co/Ultralytics/YOLOv8/resolve/main/yolov8n.tflite";
     private static final String MODEL_NAME = "yolov8n.tflite";
 
     private MediaProjectionManager mpm;
@@ -95,6 +95,8 @@ public class MainActivity extends Activity {
                 URL u = new URL(MODEL_URL);
                 conn = (HttpURLConnection) u.openConnection();
                 conn.setInstanceFollowRedirects(true);
+                conn.setConnectTimeout(15000);
+                conn.setReadTimeout(15000);
                 conn.connect();
 
                 long total = conn.getContentLengthLong();
@@ -126,11 +128,12 @@ public class MainActivity extends Activity {
                     Toast.makeText(this, "تم التنزيل بنجاح", Toast.LENGTH_SHORT).show();
                 });
             } catch (Exception e) {
+                final String errorMsg = e.getMessage() != null ? e.getMessage() : e.toString();
                 ui.post(() -> {
                     downloading = false;
                     progress.setVisibility(View.GONE);
                     refreshModelState();
-                    Toast.makeText(this, "فشل التنزيل، تأكد من الإنترنت", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "فشل: " + errorMsg, Toast.LENGTH_LONG).show();
                 });
             }
         }).start();
