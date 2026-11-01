@@ -29,16 +29,14 @@ import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.WindowManager;
 
-import org.tensorflow.lite.Interpreter;
-import org.tensorflow.lite.gpu.CompatibilityList;
-import org.tensorflow.lite.gpu.GpuDelegate;
+import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.mlkit.vision.common.InputImage;
+import com.google.mlkit.vision.objects.DetectedObject;
+import com.google.mlkit.vision.objects.ObjectDetection;
+import com.google.mlkit.vision.objects.ObjectDetector;
+import com.google.mlkit.vision.objects.defaults.ObjectDetectorOptions;
 
-import java.io.File;
-import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -47,7 +45,6 @@ public class OverlayService extends Service {
     public static final String ACTION_START = "com.wormgpt.wormpanel.START";
     private static final String CH = "esp_ch";
     private static final int CH_ID = 42;
-    private static final String MODEL_NAME = "yolov8n.tflite";
 
     private WindowManager wm;
     private SurfaceView surface;
@@ -60,14 +57,10 @@ public class OverlayService extends Service {
     private HandlerThread ht;
     private Handler handler;
 
-    private Interpreter interpreter;
-    private GpuDelegate gpuDelegate;
-    private int inputSize = 640;
-
+    private ObjectDetector detector;
     private final Paint boxPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint headPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint chestPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-
     private volatile List<Player> players = new ArrayList<>();
     private volatile boolean busy = false;
 
@@ -82,18 +75,12 @@ public class OverlayService extends Service {
             startForeground(CH_ID, n);
         }
 
-        try {
-            initPaints();
-            initInterpreter();
-        } catch (Exception e) {
-            stopSelf();
-            return START_NOT_STICKY;
-        }
+        initPaints();
+        initMLKit();
 
         int code = intent.getIntExtra("code", 0);
         Intent data = intent.getParcelableExtra("data");
-        MediaProjectionManager mpm = (MediaProjectionManager)
-                getSystemService(MEDIA_PROJECTION_SERVICE);
+        MediaProjectionManager mpm = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
         if (data == null || mpm == null) { stopSelf(); return START_NOT_STICKY; }
         mp = mpm.getMediaProjection(code, data);
 
@@ -112,27 +99,13 @@ public class OverlayService extends Service {
         chestPaint.setStyle(Paint.Style.FILL);
     }
 
-    private void initInterpreter() throws Exception {
-        File model = new File(new File(getFilesDir(), "models"), MODEL_NAME);
-        if (!model.exists()) throw new Exception("model missing");
-
-        Interpreter.Options opts = new Interpreter.Options();
-        CompatibilityList compat = new CompatibilityList();
-        if (compat.isDelegateSupportedOnThisDevice()) {
-            gpuDelegate = new GpuDelegate(compat.getBestOptionsForThisDevice());
-            opts.addDelegate(gpuDelegate);
-        } else {
-            opts.setNumThreads(4);
-        }
-        RandomAccessFile raf = new RandomAccessFile(model, "r");
-        FileChannel ch = raf.getChannel();
-        MappedByteBuffer mapped = ch.map(FileChannel.MapMode.READ_ONLY, 0, ch.size());
-        interpreter = new Interpreter(mapped, opts);
-        raf.close();
-
-        try {
-            inputSize = interpreter.getInputTensor(0).shape()[1];
-        } catch (Exception ignored) {}
+    private void initMLKit() {
+        ObjectDetectorOptions options = new ObjectDetectorOptions.Builder()
+                .setDetectorMode(ObjectDetectorOptions.STREAM_MODE)
+                .enableMultipleObjects()
+                .enableClassification()
+                .build();
+        detector = ObjectDetection.getClient(options);
     }
 
     private void setupOverlay() {
@@ -200,86 +173,32 @@ public class OverlayService extends Service {
     }
 
     private void processFrame(Bitmap frame) {
-        try {
-            Bitmap resized = Bitmap.createScaledBitmap(frame, inputSize, inputSize, true);
-            ByteBuffer in = ByteBuffer.allocateDirect(4 * inputSize * inputSize * 3);
-            in.order(ByteOrder.nativeOrder());
-            int[] pixels = new int[inputSize * inputSize];
-            resized.getPixels(pixels, 0, inputSize, 0, 0, inputSize, inputSize);
-            for (int px : pixels) {
-                in.putFloat(((px >> 16) & 0xFF) / 255f);
-                in.putFloat(((px >>  8) & 0xFF) / 255f);
-                in.putFloat(( px        & 0xFF) / 255f);
-            }
-            in.rewind();
-
-            int[] outShape = interpreter.getOutputTensor(0).shape();
-            int nC = outShape[1] - 4;
-            int nB = outShape[2];
-            float[][][] out = new float[1][outShape[1]][outShape[2]];
-            interpreter.run(in, out);
-
-            List<RectF> boxes = new ArrayList<>();
-            List<Float> scores = new ArrayList<>();
-            float sx = frame.getWidth() / (float) inputSize;
-            float sy = frame.getHeight() / (float) inputSize;
-
-            for (int i = 0; i < nB; i++) {
-                float best = 0f;
-                int bestC = -1;
-                for (int c = 0; c < nC; c++) {
-                    float s = out[0][4 + c][i];
-                    if (s > best) { best = s; bestC = c; }
-                }
-                if (bestC != 0 || best < 0.35f) continue;
-                float cx = out[0][0][i], cy = out[0][1][i];
-                float w  = out[0][2][i], h  = out[0][3][i];
-                float x1 = (cx - w / 2) * sx, y1 = (cy - h / 2) * sy;
-                float x2 = (cx + w / 2) * sx, y2 = (cy + h / 2) * sy;
-                boxes.add(new RectF(x1, y1, x2, y2));
-                scores.add(best);
-            }
-            List<RectF> kept = nms(boxes, scores, 0.45f);
-
-            List<Player> list = new ArrayList<>();
-            for (RectF b : kept) {
-                float w = b.width(), h = b.height();
-                if (w < 20 || h < 40) continue;
-                float hx = b.left + w * 0.5f;
-                float hy = b.top  + h * 0.12f;
-                float chx = b.left + w * 0.5f;
-                float chy = b.top  + h * 0.30f;
-                list.add(new Player(b, hx, hy, chx, chy));
-            }
-            players = list;
-            draw();
-        } catch (Exception ignored) {
-        } finally {
-            busy = false;
-        }
-    }
-
-    private List<RectF> nms(List<RectF> boxes, List<Float> scores, float iouTh) {
-        Integer[] idx = new Integer[boxes.size()];
-        for (int i = 0; i < idx.length; i++) idx[i] = i;
-        java.util.Arrays.sort(idx, (a, b) -> Float.compare(scores.get(b), scores.get(a)));
-        List<RectF> kept = new ArrayList<>();
-        for (int ii : idx) {
-            RectF a = boxes.get(ii);
-            boolean drop = false;
-            for (RectF k : kept) if (iou(a, k) > iouTh) { drop = true; break; }
-            if (!drop) kept.add(a);
-        }
-        return kept;
-    }
-
-    private float iou(RectF a, RectF b) {
-        float ix1 = Math.max(a.left, b.left), iy1 = Math.max(a.top, b.top);
-        float ix2 = Math.min(a.right, b.right), iy2 = Math.min(a.bottom, b.bottom);
-        float iw = Math.max(0, ix2 - ix1), ih = Math.max(0, iy2 - iy1);
-        float inter = iw * ih;
-        float ua = a.width() * a.height() + b.width() * b.height() - inter;
-        return ua <= 0 ? 0 : inter / ua;
+        InputImage image = InputImage.fromBitmap(frame, 0);
+        detector.process(image)
+                .addOnSuccessListener(new OnSuccessListener<List<DetectedObject>>() {
+                    @Override
+                    public void onSuccess(List<DetectedObject> objects) {
+                        List<Player> list = new ArrayList<>();
+                        for (DetectedObject obj : objects) {
+                            RectF boundingBox = new RectF(obj.getBoundingBox());
+                            float w = boundingBox.width();
+                            float h = boundingBox.height();
+                            
+                            if (w < 20 || h < 40) continue; // فلتر للضوضاء
+                            
+                            float hx = boundingBox.left + w * 0.5f;
+                            float hy = boundingBox.top  + h * 0.12f;
+                            float chx = boundingBox.left + w * 0.5f;
+                            float chy = boundingBox.top  + h * 0.30f;
+                            
+                            list.add(new Player(boundingBox, hx, hy, chx, chy));
+                        }
+                        players = list;
+                        draw();
+                        busy = false;
+                    }
+                })
+                .addOnFailureListener(e -> busy = false);
     }
 
     private void draw() {
@@ -321,8 +240,7 @@ public class OverlayService extends Service {
         try { if (reader != null) reader.close(); } catch (Exception ignored) {}
         try { if (mp != null) mp.stop(); } catch (Exception ignored) {}
         try { if (ht != null) ht.quitSafely(); } catch (Exception ignored) {}
-        try { if (interpreter != null) interpreter.close(); } catch (Exception ignored) {}
-        try { if (gpuDelegate != null) gpuDelegate.close(); } catch (Exception ignored) {}
+        try { if (detector != null) detector.close(); } catch (Exception ignored) {}
         super.onDestroy();
     }
 
