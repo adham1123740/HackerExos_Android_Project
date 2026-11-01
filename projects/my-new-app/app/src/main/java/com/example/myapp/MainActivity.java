@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.content.Intent;
 import android.media.projection.MediaProjectionManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.view.View;
@@ -12,8 +13,7 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.File;
 
 public class MainActivity extends Activity {
 
@@ -46,24 +46,21 @@ public class MainActivity extends Activity {
 
     private void checkModelFile() {
         try {
-            // بنفحص الملف اللي جوه الـ assets
-            InputStream is = getAssets().open(MODEL_NAME);
+            java.io.InputStream is = getAssets().open(MODEL_NAME);
             int size = is.available();
             is.close();
 
             if (size > 1_000_000) {
-                statusText.setText("الحالة: الملف موجود جوه التطبيق، جاهز للتشغيل");
+                statusText.setText("الحالة: جاهز للتشغيل");
                 btnStart.setEnabled(true);
                 btnStart.setText("تفعيل ESP وفتح ببجي");
             } else {
-                statusText.setText("الحالة: الملف صغير جداً أو تالف");
+                statusText.setText("الحالة: الملف صغير أو تالف");
                 btnStart.setEnabled(false);
-                btnStart.setText("الملف تالف");
             }
-        } catch (IOException e) {
-            statusText.setText("الحالة: الملف غير موجود في مجلد assets");
+        } catch (Exception e) {
+            statusText.setText("الحالة: الملف غير موجود في assets");
             btnStart.setEnabled(false);
-            btnStart.setText("الملف مفقود");
         }
     }
 
@@ -86,7 +83,13 @@ public class MainActivity extends Activity {
                 Intent svc = new Intent(this, OverlayService.class);
                 svc.setAction(OverlayService.ACTION_START);
                 svc.putExtra("code", res);
-                svc.putExtra("data", data);
+                // الحل السحري لمشكلة أندرويد 14+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    svc.putExtra("data", data);
+                } else {
+                    svc.putExtra("data", data);
+                }
+                
                 startForegroundService(svc);
                 openPubg();
                 finish();
