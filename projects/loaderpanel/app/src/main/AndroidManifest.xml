@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
-    package="com.s7g.loader">
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- صلاحيات الإنترنت وتحميل الملفات -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -18,9 +17,8 @@
 
     <application
         android:allowBackup="true"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@android:drawable/ic_menu_view"
         android:label="S7G Loader"
-        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
 
