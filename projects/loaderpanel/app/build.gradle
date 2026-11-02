@@ -1,12 +1,9 @@
-plugins { id 'com.android.application' }
-android {
-    namespace 'com.s7g.loader'
-    compileSdk 35
-    defaultConfig {
-        applicationId 'com.s7g.loader'
-        minSdk 23
-        targetSdk 28
-        versionCode 1
-        versionName '1.0'
-    }
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+plugins {
+    id 'com.android.application' version '8.1.0' apply false
+    id 'com.android.library' version '8.1.0' apply false
+}
+
+tasks.register('clean', Delete) {
+    delete rootProject.buildDir
 }
