@@ -4,12 +4,12 @@ plugins {
 
 android {
     namespace 'com.s7g.loader'
-    compileSdk 34
+    compileSdk 37
 
     defaultConfig {
         applicationId "com.s7g.loader"
         minSdk 26
-        targetSdk 34
+        targetSdk 37
         versionCode 1
         versionName "1.0"
     }
@@ -21,14 +21,17 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 }
 
 dependencies {
+    // مكتبات الواجهة
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
+    
+    // مكتبات Shizuku
     implementation 'dev.rikka.shizuku:api:13.1.5'
     implementation 'dev.rikka.shizuku:provider:13.1.5'
 }
