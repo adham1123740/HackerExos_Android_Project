@@ -12,7 +12,6 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
 import java.io.File;
@@ -22,6 +21,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 
 import rikka.shizuku.Shizuku;
+import rikka.shizuku.ShizukuRemoteProcess;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -39,15 +39,14 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        
+        // ملاحظة: تأكد أن ملف activity_main.xml موجود في res/layout
         setContentView(R.layout.activity_main);
 
         tvStatus = findViewById(R.id.tv_status);
         Button btnStart = findViewById(R.id.btn_start);
 
-        // 1. تهيئة Shizuku
         initShizuku();
-
-        // 2. التحقق من الصلاحيات عند فتح التطبيق
         checkPermissions();
 
         btnStart.setOnClickListener(v -> {
@@ -62,7 +61,6 @@ public class MainActivity extends AppCompatActivity {
 
     // ================= Shizuku Setup =================
     private void initShizuku() {
-        // مستمع استلام Binder
         Shizuku.addBinderReceivedListenerSticky(() -> {
             if (Shizuku.checkSelfPermission() == android.content.pm.PackageManager.PERMISSION_GRANTED) {
                 isShizukuGranted = true;
@@ -72,7 +70,6 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // مستمع نتيجة طلب الصلاحية
         Shizuku.addRequestPermissionResultListener((requestCode, grantResult) -> {
             if (requestCode == SHIZUKU_REQ_CODE) {
                 isShizukuGranted = (grantResult == android.content.pm.PackageManager.PERMISSION_GRANTED);
@@ -95,13 +92,10 @@ public class MainActivity extends AppCompatActivity {
 
     // ================= Permissions Setup =================
     private void checkPermissions() {
-        // أ. صلاحية Overlay
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
             Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName()));
             startActivityForResult(intent, REQ_OVERLAY);
-        } 
-        // ب. صلاحية Usage Stats (لمعرفة التطبيق المفتوح)
-        else if (!hasUsageStatsPermission()) {
+        } else if (!hasUsageStatsPermission()) {
             Intent intent = new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
             startActivityForResult(intent, REQ_USAGE);
         }
@@ -118,7 +112,7 @@ public class MainActivity extends AppCompatActivity {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQ_OVERLAY) {
             if (Settings.canDrawOverlays(this)) {
-                checkPermissions(); // فحص صلاحية Usage Stats بعدها
+                checkPermissions();
             } else {
                 tvStatus.setText("يجب منح صلاحية العرض فوق التطبيقات!");
             }
@@ -144,11 +138,25 @@ public class MainActivity extends AppCompatActivity {
 
                 // 2. نسخ الملف إلى مسار اللعبة باستخدام Shizuku
                 String cmd = "cp -f \"" + pakFile.getAbsolutePath() + "\" \"" + TARGET_PATH + "\"";
-                Process process = Shizuku.newProcess(new String[]{"sh", "-c", cmd}, null, null);
-                int exitCode = process.waitFor();
+                int exitCode = -1;
 
+                try {
+                    // حل مشكلة الوصول للدالة الخاصة في Shizuku عبر Reflection
+                    java.lang.reflect.Method method = Shizuku.class.getDeclaredMethod("newProcess", String[].class, String[].class, String.class);
+                    method.setAccessible(true);
+                    Object processObj = method.invoke(null, new String[]{"sh", "-c", cmd}, null, null);
+                    
+                    // ShizukuRemoteProcess هو النوع الصحيح في الإصدارات الحديثة
+                    ShizukuRemoteProcess remoteProcess = (ShizukuRemoteProcess) processObj;
+                    exitCode = remoteProcess.waitFor();
+
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+
+                final int finalExitCode = exitCode;
                 runOnUiThread(() -> {
-                    if (exitCode == 0) {
+                    if (finalExitCode == 0) {
                         tvStatus.setText("تم النسخ بنجاح! جاري فتح اللعبة...");
                         
                         // 3. فتح اللعبة
@@ -167,7 +175,7 @@ public class MainActivity extends AppCompatActivity {
                             startService(serviceIntent);
                         }
                     } else {
-                        tvStatus.setText("فشل النسخ! كود الخطأ: " + exitCode);
+                        tvStatus.setText("فشل النسخ! كود الخطأ: " + finalExitCode);
                     }
                 });
 
