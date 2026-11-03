@@ -3,6 +3,8 @@ package com.s7g.loader;
 import android.content.pm.PackageManager;
 import rikka.shizuku.Shizuku;
 import rikka.shizuku.ShizukuRemoteProcess;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 
 public class ShizukuManager {
     public static final int REQUEST_CODE = 1001;
@@ -24,18 +26,22 @@ public class ShizukuManager {
         } catch (Exception ignored) {}
     }
 
-    public static int exec(String cmd) {
-        if (!isGranted()) return -1;
+    public static String exec(String cmd) {
+        if (!isGranted()) return "Error: Shizuku permission denied";
         try {
-            java.lang.reflect.Method method = Shizuku.class.getDeclaredMethod("newProcess", String[].class, String[].class, String.class);
-            method.setAccessible(true);
-            Object processObj = method.invoke(null, new String[]{"sh", "-c", cmd}, null, null);
-            
-            ShizukuRemoteProcess process = (ShizukuRemoteProcess) processObj;
-            return process.waitFor();
+            // تشغيل الأمر باستخدام Shizuku
+            ShizukuRemoteProcess process = Shizuku.newProcess(new String[]{"sh", "-c", cmd}, null, null);
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            StringBuilder output = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                output.append(line).append("\n");
+            }
+            process.waitFor();
+            return output.toString();
         } catch (Exception e) {
             e.printStackTrace();
-            return -1;
+            return "Error: " + e.getMessage();
         }
     }
 }
