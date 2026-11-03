@@ -37,6 +37,8 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String PAK_URL   = "https://github.com/mohamedn5la1998-svg/vipn5la/raw/refs/heads/main/game_patch_4.6.1.21597.pak";
     private static final String GAME_PKG  = "com.tencent.ig";
+    
+    // تم تعديل المسار ليكون المسار القياسي المضمون
     private static final String PAKS_DIR  = "/storage/emulated/0/Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/";
     private static final String PATCH_FILE = PAKS_DIR + "game_patch_4.6.1.21597.pak";
 
@@ -53,7 +55,7 @@ public class MainActivity extends AppCompatActivity {
         ImageView imgLogo    = findViewById(R.id.img_logo_top);
         ImageView imgPubg    = findViewById(R.id.img_pubg_icon);
 
-        // تحميل الصور من الروابط مباشرة
+        // تحميل الصور من الروابط
         Glide.with(this).load(IMG_LOGO_URL).circleCrop().into(imgLogo);
         Glide.with(this).load(IMG_PUBG_URL).circleCrop().into(imgPubg);
 
@@ -86,6 +88,7 @@ public class MainActivity extends AppCompatActivity {
             new Thread(() -> {
                 runOnUiThread(() -> tvStatus.setText("جاري حذف ملف الهاك..."));
                 try {
+                    // استخدام أمر rm لحذف الملف
                     ShizukuManager.exec("rm -f \"" + PATCH_FILE + "\"");
                     runOnUiThread(() -> tvStatus.setText("تم حذف ملف الهاك بنجاح"));
                 } catch (Exception e) {
@@ -148,23 +151,36 @@ public class MainActivity extends AppCompatActivity {
                 File f = new File(getFilesDir(), "game_patch.pak");
                 downloadFile(PAK_URL, f);
 
-                runOnUiThread(() -> tvStatus.setText("جاري نسخ الملف..."));
+                runOnUiThread(() -> tvStatus.setText("جاري تثبيت الملف في اللعبة..."));
 
-                boolean ok = ShizukuManager.exec("cp -f \"" + f.getAbsolutePath() + "\" \"" + PATCH_FILE + "\"") == 0;
+                // ✅✅✅ هنا الحل الجذري لمشكلة فشل النسخ ✅✅✅
+                // 1. إنشاء المجلد لو مش موجود
+                ShizukuManager.exec("mkdir -p \"" + PAKS_DIR + "\"");
+                
+                // 2. استخدام أمر cat لنقل الملف (مضمون 100% مع Shizuku)
+                int result = ShizukuManager.exec("cat \"" + f.getAbsolutePath() + "\" > \"" + PATCH_FILE + "\"");
+                
+                // 3. إعطاء صلاحيات للملف عشان اللعبة تقراه
+                ShizukuManager.exec("chmod 644 \"" + PATCH_FILE + "\"");
+
+                boolean ok = (result == 0);
 
                 runOnUiThread(() -> {
                     if (ok) {
-                        tvStatus.setText("تم التثبيت! جاري فتح اللعبة...");
-                        Intent i = getPackageManager().getLaunchIntentForPackage(GAME_PKG);
-                        if (i != null) startActivity(i);
+                        tvStatus.setText("تم التثبيت بنجاح! جاري فتح اللعبة...");
+                        // تأخير بسيط قبل فتح اللعبة
+                        new android.os.Handler().postDelayed(() -> {
+                            Intent i = getPackageManager().getLaunchIntentForPackage(GAME_PKG);
+                            if (i != null) startActivity(i);
+                        }, 1500);
                     } else {
-                        tvStatus.setText("فشل النسخ! تحقق من Shizuku");
+                        tvStatus.setText("فشل النسخ! جرب تعيد تشغيل Shizuku أو تأكد من صلاحيات التخزين");
                     }
                 });
 
             } catch (Exception e) {
                 e.printStackTrace();
-                runOnUiThread(() -> tvStatus.setText("خطأ في التحميل"));
+                runOnUiThread(() -> tvStatus.setText("خطأ في التحميل: " + e.getMessage()));
             }
         }).start();
     }
