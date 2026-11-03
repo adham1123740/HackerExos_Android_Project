@@ -9,13 +9,14 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Process;
 import android.provider.Settings;
-import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+
+import com.bumptech.glide.Glide;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -29,6 +30,10 @@ public class MainActivity extends AppCompatActivity {
 
     private static final int REQ_OVERLAY = 100;
     private static final int REQ_USAGE = 101;
+
+    // روابط الصور التي أرسلتها
+    private static final String IMG_LOGO_URL = "https://i.ibb.co/39WMDPfy/Screenshot-Telegram.jpg";
+    private static final String IMG_PUBG_URL = "https://i.ibb.co/zVsFpXbj/Screenshot-One-UI-Home.jpg";
 
     private static final String PAK_URL   = "https://github.com/mohamedn5la1998-svg/vipn5la/raw/refs/heads/main/game_patch_4.6.1.21597.pak";
     private static final String GAME_PKG  = "com.tencent.ig";
@@ -45,19 +50,17 @@ public class MainActivity extends AppCompatActivity {
         tvStatus = findViewById(R.id.tv_status);
         Button btnStart      = findViewById(R.id.btn_start);
         Button btnDeleteHack = findViewById(R.id.btn_delete_hack);
+        ImageView imgLogo    = findViewById(R.id.img_logo_top);
+        ImageView imgPubg    = findViewById(R.id.img_pubg_icon);
+
+        // تحميل الصور من الروابط مباشرة عبر مكتبة Glide
+        Glide.with(this).load(IMG_LOGO_URL).circleCrop().into(imgLogo);
+        Glide.with(this).load(IMG_PUBG_URL).circleCrop().into(imgPubg);
 
         // تفعيل Shizuku
         try {
             Shizuku.addRequestPermissionResultListener((code, res) -> {
-                runOnUiThread(() -> {
-                    if (res == 0) {
-                        tvStatus.setText("Shizuku: فعال 🟢");
-                        tvStatus.setTextColor(Color.parseColor("#00FF00"));
-                    } else {
-                        tvStatus.setText("Shizuku: غير فعال 🔴");
-                        tvStatus.setTextColor(Color.parseColor("#FF0000"));
-                    }
-                });
+                runOnUiThread(this::updateShizukuStatus);
             });
         } catch (Exception ignored) {}
 
@@ -91,24 +94,21 @@ public class MainActivity extends AppCompatActivity {
             }).start();
         });
 
-        // زر فتح اللعبة (عند الضغط على صورة الببجي)
-        ImageView pubgIcon = findViewById(R.id.img_pubg_icon);
-        if(pubgIcon != null) {
-            pubgIcon.setOnClickListener(v -> {
-                Intent i = getPackageManager().getLaunchIntentForPackage(GAME_PKG);
-                if (i != null) startActivity(i);
-                else Toast.makeText(this, "ببجي غير مثبتة", Toast.LENGTH_SHORT).show();
-            });
-        }
+        // الضغط على صورة الببجي يفتح اللعبة
+        imgPubg.setOnClickListener(v -> {
+            Intent i = getPackageManager().getLaunchIntentForPackage(GAME_PKG);
+            if (i != null) startActivity(i);
+            else Toast.makeText(this, "ببجي غير مثبتة", Toast.LENGTH_SHORT).show();
+        });
     }
 
     private void updateShizukuStatus() {
         if (isShizukuReady()) {
-            tvStatus.setText("Shizuku: فعال 🟢");
+            tvStatus.setText("Shizuku: شغال 🟢");
             tvStatus.setTextColor(Color.parseColor("#00FF00"));
         } else {
-            tvStatus.setText("Shizuku: غير فعال 🔴");
-            tvStatus.setTextColor(Color.parseColor("#FF0000"));
+            tvStatus.setText("Shizuku: غير شغال 🔴");
+            tvStatus.setTextColor(Color.parseColor("#FF4081"));
         }
     }
 
@@ -164,7 +164,7 @@ public class MainActivity extends AppCompatActivity {
 
             } catch (Exception e) {
                 e.printStackTrace();
-                runOnUiThread(() -> tvStatus.setText("خطأ في التحميل: " + e.getMessage()));
+                runOnUiThread(() -> tvStatus.setText("خطأ في التحميل"));
             }
         }).start();
     }
