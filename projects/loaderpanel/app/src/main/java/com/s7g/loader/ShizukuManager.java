@@ -29,7 +29,7 @@ public class ShizukuManager {
     public static String exec(String cmd) {
         if (!isGranted()) return "Error: Shizuku permission denied";
         try {
-            // تشغيل الأمر باستخدام Shizuku
+            // ✅ الحل هنا: استخدام دالة newProcess بالشكل الصحيح
             ShizukuRemoteProcess process = Shizuku.newProcess(new String[]{"sh", "-c", cmd}, null, null);
             BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
             StringBuilder output = new StringBuilder();
@@ -39,7 +39,7 @@ public class ShizukuManager {
             }
             process.waitFor();
             return output.toString();
-        } catch (Exception e) {
+        } catch (Throwable e) {
             e.printStackTrace();
             return "Error: " + e.getMessage();
         }
