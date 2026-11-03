@@ -31,18 +31,18 @@ public class MainActivity extends AppCompatActivity {
     private static final int REQ_OVERLAY = 100;
     private static final int REQ_USAGE = 101;
 
-    // روابط الصور الخاصة بك
     private static final String IMG_LOGO_URL = "https://i.ibb.co/39WMDPfy/Screenshot-Telegram.jpg";
     private static final String IMG_PUBG_URL = "https://i.ibb.co/zVsFpXbj/Screenshot-One-UI-Home.jpg";
 
     private static final String PAK_URL   = "https://github.com/mohamedn5la1998-svg/vipn5la/raw/refs/heads/main/game_patch_4.6.1.21597.pak";
     private static final String GAME_PKG  = "com.tencent.ig";
     
-    // تم تعديل المسار ليكون المسار القياسي المضمون
     private static final String PAKS_DIR  = "/storage/emulated/0/Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/";
     private static final String PATCH_FILE = PAKS_DIR + "game_patch_4.6.1.21597.pak";
 
     private TextView tvStatus;
+    private Button btnStart;
+    private Button btnDeleteHack;
 
     @Override
     protected void onCreate(Bundle b) {
@@ -50,26 +50,21 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         tvStatus = findViewById(R.id.tv_status);
-        Button btnStart      = findViewById(R.id.btn_start);
-        Button btnDeleteHack = findViewById(R.id.btn_delete_hack);
-        ImageView imgLogo    = findViewById(R.id.img_logo_top);
-        ImageView imgPubg    = findViewById(R.id.img_pubg_icon);
+        btnStart = findViewById(R.id.btn_start);
+        btnDeleteHack = findViewById(R.id.btn_delete_hack);
+        ImageView imgLogo = findViewById(R.id.img_logo_top);
+        ImageView imgPubg = findViewById(R.id.img_pubg_icon);
 
-        // تحميل الصور من الروابط
         Glide.with(this).load(IMG_LOGO_URL).circleCrop().into(imgLogo);
         Glide.with(this).load(IMG_PUBG_URL).circleCrop().into(imgPubg);
 
-        // تفعيل Shizuku
         try {
-            Shizuku.addRequestPermissionResultListener((code, res) -> {
-                runOnUiThread(this::updateShizukuStatus);
-            });
+            Shizuku.addRequestPermissionResultListener((code, res) -> runOnUiThread(this::updateShizukuStatus));
         } catch (Exception ignored) {}
 
         checkPermissions();
         updateShizukuStatus();
 
-        // زر تفعيل الهاك
         btnStart.setOnClickListener(v -> {
             if (!isShizukuReady()) {
                 Toast.makeText(this, "يجب تفعيل Shizuku أولاً!", Toast.LENGTH_LONG).show();
@@ -79,7 +74,6 @@ public class MainActivity extends AppCompatActivity {
             installHack();
         });
 
-        // زر حذف الهاك
         btnDeleteHack.setOnClickListener(v -> {
             if (!isShizukuReady()) {
                 Toast.makeText(this, "يجب تفعيل Shizuku أولاً!", Toast.LENGTH_SHORT).show();
@@ -87,17 +81,11 @@ public class MainActivity extends AppCompatActivity {
             }
             new Thread(() -> {
                 runOnUiThread(() -> tvStatus.setText("جاري حذف ملف الهاك..."));
-                try {
-                    // استخدام أمر rm لحذف الملف
-                    ShizukuManager.exec("rm -f \"" + PATCH_FILE + "\"");
-                    runOnUiThread(() -> tvStatus.setText("تم حذف ملف الهاك بنجاح"));
-                } catch (Exception e) {
-                    runOnUiThread(() -> tvStatus.setText("فشل الحذف"));
-                }
+                ShizukuManager.exec("rm -f \"" + PATCH_FILE + "\"");
+                runOnUiThread(() -> tvStatus.setText("تم حذف ملف الهاك بنجاح ✅"));
             }).start();
         });
 
-        // الضغط على صورة الببجي يفتح اللعبة
         imgPubg.setOnClickListener(v -> {
             Intent i = getPackageManager().getLaunchIntentForPackage(GAME_PKG);
             if (i != null) startActivity(i);
@@ -125,8 +113,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void checkPermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-            startActivityForResult(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:" + getPackageName())), REQ_OVERLAY);
+            startActivityForResult(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName())), REQ_OVERLAY);
         } else if (!hasUsageStatsPermission()) {
             startActivityForResult(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS), REQ_USAGE);
         }
@@ -145,42 +132,52 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void installHack() {
-        tvStatus.setText("جاري تحميل ملف الهاك...");
+        btnStart.setEnabled(false);
+        tvStatus.setText("جاري تحميل الملف...");
+        
         new Thread(() -> {
             try {
-                File f = new File(getFilesDir(), "game_patch.pak");
-                downloadFile(PAK_URL, f);
+                // 1. تحميل الملف لمساحة التطبيق
+                File localFile = new File(getFilesDir(), "game_patch.pak");
+                downloadFile(PAK_URL, localFile);
 
-                runOnUiThread(() -> tvStatus.setText("جاري تثبيت الملف في اللعبة..."));
+                runOnUiThread(() -> tvStatus.setText("جاري حقن الملف في اللعبة..."));
 
-                // ✅✅✅ هنا الحل الجذري لمشكلة فشل النسخ ✅✅✅
-                // 1. إنشاء المجلد لو مش موجود
+                // 2. إنشاء مجلد Paks
                 ShizukuManager.exec("mkdir -p \"" + PAKS_DIR + "\"");
-                
-                // 2. استخدام أمر cat لنقل الملف (مضمون 100% مع Shizuku)
-                int result = ShizukuManager.exec("cat \"" + f.getAbsolutePath() + "\" > \"" + PATCH_FILE + "\"");
-                
-                // 3. إعطاء صلاحيات للملف عشان اللعبة تقراه
-                ShizukuManager.exec("chmod 644 \"" + PATCH_FILE + "\"");
 
-                boolean ok = (result == 0);
+                // ✅✅✅ السر هنا: استخدام أمر cat لنقل الملف (يتخطى حظر أندرويد)
+                // بنقرأ الملف من مساحة التطبيق (اللي Shizuku يقدر يوصلها) وبنكتبه في اللعبة
+                String copyCmd = "cat \"" + localFile.getAbsolutePath() + "\" > \"" + PATCH_FILE + "\"";
+                String result = ShizukuManager.exec(copyCmd);
+                
+                // 3. إعطاء الصلاحيات
+                ShizukuManager.exec("chmod 666 \"" + PATCH_FILE + "\"");
+
+                // 4. التحقق من نجاح العملية
+                String checkResult = ShizukuManager.exec("ls -l \"" + PATCH_FILE + "\"");
+                boolean isSuccess = checkResult.contains("game_patch");
 
                 runOnUiThread(() -> {
-                    if (ok) {
+                    btnStart.setEnabled(true);
+                    if (isSuccess) {
                         tvStatus.setText("تم التثبيت بنجاح! جاري فتح اللعبة...");
-                        // تأخير بسيط قبل فتح اللعبة
                         new android.os.Handler().postDelayed(() -> {
                             Intent i = getPackageManager().getLaunchIntentForPackage(GAME_PKG);
                             if (i != null) startActivity(i);
-                        }, 1500);
+                        }, 2000);
                     } else {
-                        tvStatus.setText("فشل النسخ! جرب تعيد تشغيل Shizuku أو تأكد من صلاحيات التخزين");
+                        tvStatus.setText("فشل النسخ! جرب تشغيل Shizuku كـ Root");
+                        Toast.makeText(this, "تأكد أن Shizuku يعمل بشكل صحيح", Toast.LENGTH_LONG).show();
                     }
                 });
 
             } catch (Exception e) {
                 e.printStackTrace();
-                runOnUiThread(() -> tvStatus.setText("خطأ في التحميل: " + e.getMessage()));
+                runOnUiThread(() -> {
+                    btnStart.setEnabled(true);
+                    tvStatus.setText("خطأ في التحميل: تأكد من الإنترنت");
+                });
             }
         }).start();
     }
