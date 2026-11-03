@@ -38,6 +38,6 @@
         android:id="@+id/btn_delete_protection"
         android:layout_width="match_parent"
         android:layout_height="60dp"
-        android:text="حذف ملفات الحماية" />
+        android:text="لا تضغط هنا بتمسح ملفات لعبة" />
 
 </LinearLayout>
