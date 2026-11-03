@@ -5,6 +5,7 @@ import rikka.shizuku.Shizuku;
 import rikka.shizuku.ShizukuRemoteProcess;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.lang.reflect.Method;
 
 public class ShizukuManager {
     public static final int REQUEST_CODE = 1001;
@@ -29,8 +30,12 @@ public class ShizukuManager {
     public static String exec(String cmd) {
         if (!isGranted()) return "Error: Shizuku permission denied";
         try {
-            // ✅ الحل هنا: استخدام دالة newProcess بالشكل الصحيح
-            ShizukuRemoteProcess process = Shizuku.newProcess(new String[]{"sh", "-c", cmd}, null, null);
+            // ✅ الحل هنا: استخدام Reflection عشان نوصل للدالة المخفية
+            Method method = Shizuku.class.getDeclaredMethod("newProcess", String[].class, String[].class, String.class);
+            method.setAccessible(true); // تجاهل حماية الـ private
+            
+            ShizukuRemoteProcess process = (ShizukuRemoteProcess) method.invoke(null, new String[]{"sh", "-c", cmd}, null, null);
+            
             BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
             StringBuilder output = new StringBuilder();
             String line;
