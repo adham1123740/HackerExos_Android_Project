@@ -16,13 +16,14 @@ public class ShizukuManager {
     }
 
     public static void requestPermission() {
-        if (Shizuku.isPreV11() || Shizuku.getVersion() < 11) return;
-        if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
-            Shizuku.requestPermission(REQUEST_CODE);
-        }
+        try {
+            if (Shizuku.isPreV11() || Shizuku.getVersion() < 11) return;
+            if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
+                Shizuku.requestPermission(REQUEST_CODE);
+            }
+        } catch (Exception ignored) {}
     }
 
-    // تنفيذ أمر باستخدام Shizuku (عبر Reflection لتجاوز قيود الإصدارات الحديثة)
     public static int exec(String cmd) {
         if (!isGranted()) return -1;
         try {
@@ -36,9 +37,5 @@ public class ShizukuManager {
             e.printStackTrace();
             return -1;
         }
-    }
-
-    public static boolean copyFile(String src, String dst) {
-        return exec("cp -f \"" + src + "\" \"" + dst + "\"") == 0;
     }
 }
