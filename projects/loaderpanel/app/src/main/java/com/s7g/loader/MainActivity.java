@@ -31,7 +31,7 @@ public class MainActivity extends AppCompatActivity {
     private static final int REQ_OVERLAY = 100;
     private static final int REQ_USAGE = 101;
 
-    // روابط الصور التي أرسلتها
+    // روابط الصور الخاصة بك
     private static final String IMG_LOGO_URL = "https://i.ibb.co/39WMDPfy/Screenshot-Telegram.jpg";
     private static final String IMG_PUBG_URL = "https://i.ibb.co/zVsFpXbj/Screenshot-One-UI-Home.jpg";
 
@@ -53,7 +53,7 @@ public class MainActivity extends AppCompatActivity {
         ImageView imgLogo    = findViewById(R.id.img_logo_top);
         ImageView imgPubg    = findViewById(R.id.img_pubg_icon);
 
-        // تحميل الصور من الروابط مباشرة عبر مكتبة Glide
+        // تحميل الصور من الروابط مباشرة
         Glide.with(this).load(IMG_LOGO_URL).circleCrop().into(imgLogo);
         Glide.with(this).load(IMG_PUBG_URL).circleCrop().into(imgPubg);
 
