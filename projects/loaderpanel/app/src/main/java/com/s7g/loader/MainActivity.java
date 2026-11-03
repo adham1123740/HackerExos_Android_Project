@@ -21,26 +21,21 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 
 import rikka.shizuku.Shizuku;
-import rikka.shizuku.ShizukuRemoteProcess;
 
 public class MainActivity extends AppCompatActivity {
 
     private static final int REQ_OVERLAY = 100;
     private static final int REQ_USAGE = 101;
-    private static final int SHIZUKU_REQ_CODE = 1001;
     
     private static final String PAK_URL = "https://github.com/mohamedn5la1998-svg/vipn5la/raw/refs/heads/main/game_patch_4.6.1.21597.pak";
     private static final String GAME_PKG = "com.tencent.ig";
     private static final String TARGET_PATH = "/storage/emulated/0/Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/game_patch_4.6.1.21597.pak";
 
     private TextView tvStatus;
-    private boolean isShizukuGranted = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        
-        // ملاحظة: تأكد أن ملف activity_main.xml موجود في res/layout
         setContentView(R.layout.activity_main);
 
         tvStatus = findViewById(R.id.tv_status);
@@ -50,47 +45,32 @@ public class MainActivity extends AppCompatActivity {
         checkPermissions();
 
         btnStart.setOnClickListener(v -> {
-            if (!isShizukuGranted) {
+            if (!ShizukuManager.isGranted()) {
                 Toast.makeText(this, "يجب منح صلاحية Shizuku أولاً!", Toast.LENGTH_LONG).show();
-                requestShizukuPermission();
+                ShizukuManager.requestPermission();
                 return;
             }
             startHackProcess();
         });
     }
 
-    // ================= Shizuku Setup =================
     private void initShizuku() {
         Shizuku.addBinderReceivedListenerSticky(() -> {
-            if (Shizuku.checkSelfPermission() == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                isShizukuGranted = true;
+            if (ShizukuManager.isGranted()) {
                 runOnUiThread(() -> tvStatus.setText("Shizuku جاهز"));
             } else {
-                runOnUiThread(this::requestShizukuPermission);
+                runOnUiThread(ShizukuManager::requestPermission);
             }
         });
 
         Shizuku.addRequestPermissionResultListener((requestCode, grantResult) -> {
-            if (requestCode == SHIZUKU_REQ_CODE) {
-                isShizukuGranted = (grantResult == android.content.pm.PackageManager.PERMISSION_GRANTED);
-                runOnUiThread(() -> tvStatus.setText(isShizukuGranted ? "تم منح صلاحية Shizuku" : "تم رفض صلاحية Shizuku"));
+            if (requestCode == ShizukuManager.REQUEST_CODE) {
+                runOnUiThread(() -> tvStatus.setText(
+                    ShizukuManager.isGranted() ? "تم منح صلاحية Shizuku" : "تم رفض صلاحية Shizuku"));
             }
         });
     }
 
-    private void requestShizukuPermission() {
-        if (Shizuku.isPreV11() || Shizuku.getVersion() < 11) {
-            tvStatus.setText("إصدار Shizuku قديم جداً");
-            return;
-        }
-        if (Shizuku.checkSelfPermission() != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            Shizuku.requestPermission(SHIZUKU_REQ_CODE);
-        } else {
-            isShizukuGranted = true;
-        }
-    }
-
-    // ================= Permissions Setup =================
     private void checkPermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
             Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName()));
@@ -125,57 +105,25 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // ================= Hack Process =================
     private void startHackProcess() {
         tvStatus.setText("جاري تحميل ملف PAK...");
         new Thread(() -> {
             try {
-                // 1. تحميل الملف
-                File pakFile = new File(getFilesDir(), "game_patch_4.6.1.21597.pak");
+                File pakFile = new File(getFilesDir(), "game_patch.pak");
                 downloadFile(PAK_URL, pakFile);
 
                 runOnUiThread(() -> tvStatus.setText("جاري نسخ الملف إلى اللعبة..."));
 
-                // 2. نسخ الملف إلى مسار اللعبة باستخدام Shizuku
-                String cmd = "cp -f \"" + pakFile.getAbsolutePath() + "\" \"" + TARGET_PATH + "\"";
-                int exitCode = -1;
+                boolean success = ShizukuManager.copyFile(pakFile.getAbsolutePath(), TARGET_PATH);
 
-                try {
-                    // حل مشكلة الوصول للدالة الخاصة في Shizuku عبر Reflection
-                    java.lang.reflect.Method method = Shizuku.class.getDeclaredMethod("newProcess", String[].class, String[].class, String.class);
-                    method.setAccessible(true);
-                    Object processObj = method.invoke(null, new String[]{"sh", "-c", cmd}, null, null);
-                    
-                    // ShizukuRemoteProcess هو النوع الصحيح في الإصدارات الحديثة
-                    ShizukuRemoteProcess remoteProcess = (ShizukuRemoteProcess) processObj;
-                    exitCode = remoteProcess.waitFor();
-
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-
-                final int finalExitCode = exitCode;
                 runOnUiThread(() -> {
-                    if (finalExitCode == 0) {
+                    if (success) {
                         tvStatus.setText("تم النسخ بنجاح! جاري فتح اللعبة...");
-                        
-                        // 3. فتح اللعبة
                         Intent launchIntent = getPackageManager().getLaunchIntentForPackage(GAME_PKG);
-                        if (launchIntent != null) {
-                            startActivity(launchIntent);
-                        } else {
-                            Toast.makeText(this, "ببجي غير مثبتة!", Toast.LENGTH_SHORT).show();
-                        }
-
-                        // 4. تشغيل خدمة الواجهة العائمة
-                        Intent serviceIntent = new Intent(this, FloatingService.class);
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            startForegroundService(serviceIntent);
-                        } else {
-                            startService(serviceIntent);
-                        }
+                        if (launchIntent != null) startActivity(launchIntent);
+                        startForegroundService(new Intent(this, FloatingService.class));
                     } else {
-                        tvStatus.setText("فشل النسخ! كود الخطأ: " + finalExitCode);
+                        tvStatus.setText("فشل النسخ! تأكد من منح صلاحية Shizuku.");
                     }
                 });
 
@@ -197,9 +145,7 @@ public class MainActivity extends AppCompatActivity {
              FileOutputStream out = new FileOutputStream(outFile)) {
             byte[] buf = new byte[8192];
             int len;
-            while ((len = in.read(buf)) > 0) {
-                out.write(buf, 0, len);
-            }
+            while ((len = in.read(buf)) > 0) out.write(buf, 0, len);
         } finally {
             conn.disconnect();
         }
