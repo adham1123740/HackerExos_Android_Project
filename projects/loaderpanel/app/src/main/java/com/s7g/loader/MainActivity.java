@@ -3,12 +3,15 @@ package com.s7g.loader;
 import android.app.AppOpsManager;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Process;
 import android.provider.Settings;
+import android.view.View;
 import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -31,100 +34,90 @@ public class MainActivity extends AppCompatActivity {
     private static final String GAME_PKG  = "com.tencent.ig";
     private static final String PAKS_DIR  = "/storage/emulated/0/Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/";
     private static final String PATCH_FILE = PAKS_DIR + "game_patch_4.6.1.21597.pak";
-    private static final String PROTECT_FILE = PAKS_DIR + "pakchunk0-Android_NoES2.pak";
-    private static final String ACE_LIB = "/data/data/com.tencent.ig/lib/libanogs.so";
 
     private TextView tvStatus;
 
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
-        // ربط ملف الواجهة
         setContentView(R.layout.activity_main);
 
-        // ربط العناصر
         tvStatus = findViewById(R.id.tv_status);
         Button btnStart      = findViewById(R.id.btn_start);
-        Button btnDeleteProt = findViewById(R.id.btn_delete_protection);
         Button btnDeleteHack = findViewById(R.id.btn_delete_hack);
-        Button btnLaunch     = findViewById(R.id.btn_launch);
 
-        // محاولة تهيئة Shizuku بأمان (بدون انهيار إذا لم تكن مفعلة)
-        initShizuku();
+        // تفعيل Shizuku
+        try {
+            Shizuku.addRequestPermissionResultListener((code, res) -> {
+                runOnUiThread(() -> {
+                    if (res == 0) {
+                        tvStatus.setText("Shizuku: فعال 🟢");
+                        tvStatus.setTextColor(Color.parseColor("#00FF00"));
+                    } else {
+                        tvStatus.setText("Shizuku: غير فعال 🔴");
+                        tvStatus.setTextColor(Color.parseColor("#FF0000"));
+                    }
+                });
+            });
+        } catch (Exception ignored) {}
+
         checkPermissions();
+        updateShizukuStatus();
 
-        // زر تشغيل الهكر
+        // زر تفعيل الهاك
         btnStart.setOnClickListener(v -> {
             if (!isShizukuReady()) {
-                Toast.makeText(this, "يجب تفعيل Shizuku أولاً ومنح الصلاحية!", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "يجب تفعيل Shizuku أولاً!", Toast.LENGTH_LONG).show();
                 try { Shizuku.requestPermission(1001); } catch (Exception ignored) {}
-                tvStatus.setText("في انتظار صلاحية Shizuku...");
                 return;
             }
             installHack();
         });
 
-        // زر حذف الحماية
-        btnDeleteProt.setOnClickListener(v -> {
-            if (!isShizukuReady()) {
-                Toast.makeText(this, "يجب تفعيل Shizuku أولاً!", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            new Thread(() -> {
-                runOnUiThread(() -> tvStatus.setText("جاري حذف ملفات الحماية..."));
-                try {
-                    ShizukuManager.exec("rm -f \"" + PROTECT_FILE + "\"");
-                    ShizukuManager.exec("rm -f \"" + ACE_LIB + "\"");
-                    runOnUiThread(() -> tvStatus.setText("تم حذف ملفات الحماية"));
-                } catch (Exception e) {
-                    runOnUiThread(() -> tvStatus.setText("فشل الحذف"));
-                }
-            }).start();
-        });
-
-        // زر حذف الهكر
+        // زر حذف الهاك
         btnDeleteHack.setOnClickListener(v -> {
             if (!isShizukuReady()) {
                 Toast.makeText(this, "يجب تفعيل Shizuku أولاً!", Toast.LENGTH_SHORT).show();
                 return;
             }
             new Thread(() -> {
-                runOnUiThread(() -> tvStatus.setText("جاري حذف ملف الهكر..."));
+                runOnUiThread(() -> tvStatus.setText("جاري حذف ملف الهاك..."));
                 try {
                     ShizukuManager.exec("rm -f \"" + PATCH_FILE + "\"");
-                    runOnUiThread(() -> tvStatus.setText("تم حذف ملف الهكر"));
+                    runOnUiThread(() -> tvStatus.setText("تم حذف ملف الهاك بنجاح"));
                 } catch (Exception e) {
                     runOnUiThread(() -> tvStatus.setText("فشل الحذف"));
                 }
             }).start();
         });
 
-        // زر فتح اللعبة
-        btnLaunch.setOnClickListener(v -> {
-            Intent i = getPackageManager().getLaunchIntentForPackage(GAME_PKG);
-            if (i != null) startActivity(i);
-            else Toast.makeText(this, "ببجي غير مثبتة", Toast.LENGTH_SHORT).show();
-        });
+        // زر فتح اللعبة (عند الضغط على صورة الببجي)
+        ImageView pubgIcon = findViewById(R.id.img_pubg_icon);
+        if(pubgIcon != null) {
+            pubgIcon.setOnClickListener(v -> {
+                Intent i = getPackageManager().getLaunchIntentForPackage(GAME_PKG);
+                if (i != null) startActivity(i);
+                else Toast.makeText(this, "ببجي غير مثبتة", Toast.LENGTH_SHORT).show();
+            });
+        }
     }
 
-    // دالة آمنة للتحقق من Shizuku لمنع الانهيار
+    private void updateShizukuStatus() {
+        if (isShizukuReady()) {
+            tvStatus.setText("Shizuku: فعال 🟢");
+            tvStatus.setTextColor(Color.parseColor("#00FF00"));
+        } else {
+            tvStatus.setText("Shizuku: غير فعال 🔴");
+            tvStatus.setTextColor(Color.parseColor("#FF0000"));
+        }
+    }
+
     private boolean isShizukuReady() {
         try {
             return Shizuku.pingBinder() && Shizuku.checkSelfPermission() == android.content.pm.PackageManager.PERMISSION_GRANTED;
         } catch (Exception e) {
             return false;
         }
-    }
-
-    private void initShizuku() {
-        try {
-            Shizuku.addBinderReceivedListenerSticky(() -> {
-                runOnUiThread(() -> tvStatus.setText("Shizuku متصل"));
-            });
-            Shizuku.addRequestPermissionResultListener((code, res) -> {
-                runOnUiThread(() -> tvStatus.setText(res == 0 ? "تم منح صلاحية Shizuku" : "تم رفض الصلاحية"));
-            });
-        } catch (Exception ignored) {}
     }
 
     private void checkPermissions() {
@@ -143,26 +136,25 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
-    protected void onActivityResult(int req, int res, Intent data) {
-        super.onActivityResult(req, res, data);
-        if (req == REQ_OVERLAY && Settings.canDrawOverlays(this)) checkPermissions();
-        else if (req == REQ_USAGE && hasUsageStatsPermission()) tvStatus.setText("جميع الصلاحيات جاهزة");
+    protected void onResume() {
+        super.onResume();
+        updateShizukuStatus();
     }
 
     private void installHack() {
-        tvStatus.setText("جاري تحميل ملف PAK...");
+        tvStatus.setText("جاري تحميل ملف الهاك...");
         new Thread(() -> {
             try {
                 File f = new File(getFilesDir(), "game_patch.pak");
                 downloadFile(PAK_URL, f);
 
-                runOnUiThread(() -> tvStatus.setText("جاري نسخ الملف إلى اللعبة..."));
+                runOnUiThread(() -> tvStatus.setText("جاري نسخ الملف..."));
 
                 boolean ok = ShizukuManager.exec("cp -f \"" + f.getAbsolutePath() + "\" \"" + PATCH_FILE + "\"") == 0;
 
                 runOnUiThread(() -> {
                     if (ok) {
-                        tvStatus.setText("تم التثبيت! افتح اللعبة");
+                        tvStatus.setText("تم التثبيت! جاري فتح اللعبة...");
                         Intent i = getPackageManager().getLaunchIntentForPackage(GAME_PKG);
                         if (i != null) startActivity(i);
                     } else {
