@@ -2,7 +2,7 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#0F041C"
+    android:background="@drawable/bg_gradient"
     android:fillViewport="true">
 
     <LinearLayout
@@ -12,21 +12,22 @@
         android:padding="20dp"
         android:gravity="center_horizontal">
 
-        <!-- بطاقة المطور العلوية -->
+        <!-- البطاقة العلوية (اسم المطور) -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="@drawable/bg_card_shape"
+            android:background="@drawable/bg_card"
             android:orientation="vertical"
             android:gravity="center"
             android:padding="25dp"
             android:layout_marginTop="10dp">
 
+            <!-- صورة اللوجو -->
             <ImageView
                 android:id="@+id/img_logo_top"
                 android:layout_width="130dp"
                 android:layout_height="130dp"
-                android:background="@drawable/circle_pink_border"
+                android:background="@drawable/btn_purple_outline"
                 android:padding="5dp"
                 android:scaleType="centerCrop" />
 
@@ -64,7 +65,7 @@
             android:textColor="#FF4081"
             android:textSize="16sp"
             android:textStyle="bold"
-            android:background="@drawable/shizuku_shape"
+            android:background="@drawable/btn_purple_outline"
             android:paddingHorizontal="30dp"
             android:paddingVertical="10dp"
             android:layout_marginTop="25dp" />
@@ -86,7 +87,7 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="@drawable/bg_card_shape"
+            android:background="@drawable/bg_card"
             android:orientation="vertical"
             android:padding="20dp">
 
@@ -96,11 +97,12 @@
                 android:orientation="horizontal"
                 android:gravity="center_vertical">
 
+                <!-- صورة الببجي -->
                 <ImageView
                     android:id="@+id/img_pubg_icon"
                     android:layout_width="75dp"
                     android:layout_height="75dp"
-                    android:background="@drawable/circle_pink_border"
+                    android:background="@drawable/btn_purple_outline"
                     android:padding="3dp"
                     android:scaleType="centerCrop" />
 
@@ -129,6 +131,7 @@
                 </LinearLayout>
             </LinearLayout>
 
+            <!-- شريط الحماية مغلقة -->
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -138,7 +141,7 @@
                 android:gravity="end"
                 android:padding="10dp"
                 android:layout_marginTop="15dp"
-                android:background="@drawable/btn_outline_shape"/>
+                android:background="@drawable/btn_purple_outline"/>
 
             <View
                 android:layout_width="match_parent"
@@ -147,6 +150,7 @@
                 android:layout_marginTop="15dp"
                 android:layout_marginBottom="15dp"/>
 
+            <!-- زر تفعيل الهاك (لونه بينك) -->
             <Button
                 android:id="@+id/btn_start"
                 android:layout_width="match_parent"
@@ -155,9 +159,10 @@
                 android:textColor="#FFFFFF"
                 android:textSize="16sp"
                 android:textStyle="bold"
-                android:background="@drawable/btn_pink_shape"
+                android:background="@drawable/btn_pink"
                 android:layout_marginTop="10dp"/>
 
+            <!-- زر حذف ملف الهاك (إطار بنفسجي) -->
             <Button
                 android:id="@+id/btn_delete_hack"
                 android:layout_width="match_parent"
@@ -166,7 +171,7 @@
                 android:textColor="#FF4081"
                 android:textSize="16sp"
                 android:textStyle="bold"
-                android:background="@drawable/btn_outline_shape"
+                android:background="@drawable/btn_purple_outline"
                 android:layout_marginTop="15dp"/>
 
         </LinearLayout>
