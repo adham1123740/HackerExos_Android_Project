@@ -2,24 +2,42 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:gravity="center"
     android:orientation="vertical"
-    android:padding="20dp">
+    android:gravity="center"
+    android:padding="20dp"
+    android:background="#111111">
 
     <TextView
         android:id="@+id/tv_status"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="مرحباً بك في S7G Loader"
+        android:text="الحالة: جاهز"
+        android:textColor="#00FF00"
         android:textSize="18sp"
-        android:layout_marginBottom="30dp" />
+        android:layout_marginBottom="20dp" />
 
     <Button
         android:id="@+id/btn_start"
         android:layout_width="match_parent"
         android:layout_height="60dp"
-        android:text="تشغيل الهاك (START)"
-        android:textStyle="bold"
-        android:textSize="18sp" />
+        android:text="تشغيل الهكر" />
+
+    <Button
+        android:id="@+id/btn_launch"
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:text="فتح ببجي" />
+
+    <Button
+        android:id="@+id/btn_delete_hack"
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:text="حذف ملف الهكر" />
+
+    <Button
+        android:id="@+id/btn_delete_protection"
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:text="حذف ملفات الحماية" />
 
 </LinearLayout>
