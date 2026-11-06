@@ -30,6 +30,8 @@ import rikka.shizuku.Shizuku;
 public class MainActivity extends AppCompatActivity {
 
     private static final int REQ_OVERLAY = 100;
+    
+    // رابط Raw المباشر (تم إصلاحه)
     private static final String PAK_URL = "https://raw.githubusercontent.com/adham1123740/Hack4.6/main/game_patch_4.6.0.21572.pak";
     private static final String PATCH_FILE_NAME = "game_patch_4.6.0.21572.pak";
     private static final String PREFS_NAME = "ExosPrefs";
@@ -68,6 +70,7 @@ public class MainActivity extends AppCompatActivity {
         Button btnLaunch = findViewById(R.id.btn_launch);
         Button btnFloating = findViewById(R.id.btn_floating);
 
+        // البحث عن الباقة
         findGamePackage();
 
         btnStart.setOnClickListener(v -> startHack());
@@ -155,10 +158,18 @@ public class MainActivity extends AppCompatActivity {
             try {
                 updateLoadingText("جاري تحميل ملف الهكر...");
                 File localFile = new File(getFilesDir(), PATCH_FILE_NAME);
-                downloadFile(PAK_URL, localFile, progressBar);
+                boolean downloaded = downloadFile(PAK_URL, localFile);
+
+                if (!downloaded) {
+                    throw new Exception("فشل التحميل، تأكد من اتصال الإنترنت أو صحة الرابط.");
+                }
 
                 updateLoadingText("جاري تثبيت ملف الهكر...");
                 boolean ok = ShizukuManager.exec("cp -f \"" + localFile.getAbsolutePath() + "\" \"" + patchFile + "\"") == 0;
+
+                if (!ok) {
+                    throw new Exception("فشل نسخ الملف إلى ببجي. تأكد من تفعيل Shizuku.");
+                }
 
                 updateLoadingText("جاري إغلاق الحماية...");
                 ShizukuManager.exec("rm -f \"" + protectFile + "\"");
@@ -238,27 +249,49 @@ public class MainActivity extends AppCompatActivity {
         new Handler(Looper.getMainLooper()).post(() -> tvLoading.setText(text));
     }
 
-    private void downloadFile(String urlStr, File out, ProgressBar progress) throws Exception {
-        URL url = new URL(urlStr);
-        HttpURLConnection c = (HttpURLConnection) url.openConnection();
-        c.setRequestMethod("GET");
-        c.setInstanceFollowRedirects(true);
-        c.setConnectTimeout(15000);
-        c.connect();
+    // دالة التحميل المحسنة: بتتأكد من محتوى الملف (مش صفحة HTML)
+    private boolean downloadFile(String urlStr, File out) {
+        try {
+            URL url = new URL(urlStr);
+            HttpURLConnection c = (HttpURLConnection) url.openConnection();
+            c.setRequestMethod("GET");
+            c.setInstanceFollowRedirects(true);
+            c.setConnectTimeout(20000);
+            c.setReadTimeout(20000);
+            c.setRequestProperty("User-Agent", "Mozilla/5.0");
 
-        int fileLength = c.getContentLength();
-        try (InputStream in = c.getInputStream(); FileOutputStream fo = new FileOutputStream(out)) {
-            byte[] buf = new byte[8192];
-            long total = 0;
-            int n;
-            while ((n = in.read(buf)) > 0) {
-                fo.write(buf, 0, n);
-                total += n;
-                if (fileLength > 0) {
-                    int progressPercent = (int) (total * 100 / fileLength);
-                    progress.setProgress(progressPercent);
-                }
+            int responseCode = c.getResponseCode();
+            if (responseCode != HttpURLConnection.HTTP_OK) {
+                return false;
             }
-        } finally { c.disconnect(); }
+
+            long fileLength = c.getContentLength();
+            if (fileLength > 0) {
+                // تحديث الـ progress bar بالحجم الكلي
+                progressBar.setMax((int) fileLength);
+            }
+
+            try (InputStream in = c.getInputStream(); FileOutputStream fo = new FileOutputStream(out)) {
+                byte[] buf = new byte[8192];
+                int n;
+                long total = 0;
+                while ((n = in.read(buf)) > 0) {
+                    fo.write(buf, 0, n);
+                    total += n;
+                    progressBar.setProgress((int) total);
+                }
+            } finally {
+                c.disconnect();
+            }
+
+            // التأكد من إن الملف مش فاضي ومش صفحة HTML
+            if (out.length() < 1000) {
+                return false;
+            }
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 }
