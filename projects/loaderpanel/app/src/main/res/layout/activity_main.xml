@@ -151,17 +151,6 @@
                 android:textStyle="bold"
                 android:backgroundTint="#0A0810"
                 android:layout_marginTop="12dp"/>
-            
-            <!-- زر القائمة العائمة -->
-            <Button
-                android:id="@+id/btn_floating"
-                android:layout_width="match_parent"
-                android:layout_height="55dp"
-                android:text="FLOATING • القائمة العائمة"
-                android:textColor="#D500F9"
-                android:textStyle="bold"
-                android:backgroundTint="#0A0810"
-                android:layout_marginTop="12dp"/>
 
         </LinearLayout>
 
