@@ -30,8 +30,6 @@ import rikka.shizuku.Shizuku;
 public class MainActivity extends AppCompatActivity {
 
     private static final int REQ_OVERLAY = 100;
-    
-    // رابط Raw المباشر (تم إصلاحه)
     private static final String PAK_URL = "https://raw.githubusercontent.com/adham1123740/Hack4.6/main/game_patch_4.6.0.21572.pak";
     private static final String PATCH_FILE_NAME = "game_patch_4.6.0.21572.pak";
     private static final String PREFS_NAME = "ExosPrefs";
@@ -70,7 +68,6 @@ public class MainActivity extends AppCompatActivity {
         Button btnLaunch = findViewById(R.id.btn_launch);
         Button btnFloating = findViewById(R.id.btn_floating);
 
-        // البحث عن الباقة
         findGamePackage();
 
         btnStart.setOnClickListener(v -> startHack());
@@ -161,14 +158,14 @@ public class MainActivity extends AppCompatActivity {
                 boolean downloaded = downloadFile(PAK_URL, localFile);
 
                 if (!downloaded) {
-                    throw new Exception("فشل التحميل، تأكد من اتصال الإنترنت أو صحة الرابط.");
+                    throw new Exception("فشل التحميل. تأكد من اتصال الإنترنت.");
                 }
 
                 updateLoadingText("جاري تثبيت ملف الهكر...");
-                boolean ok = ShizukuManager.exec("cp -f \"" + localFile.getAbsolutePath() + "\" \"" + patchFile + "\"") == 0;
+                boolean copied = copyToGame(localFile.getAbsolutePath(), patchFile);
 
-                if (!ok) {
-                    throw new Exception("فشل نسخ الملف إلى ببجي. تأكد من تفعيل Shizuku.");
+                if (!copied) {
+                    throw new Exception("فشل نسخ الملف. تأكد من منح Shizuku الصلاحيات أو استخدام نسخة أحدث.");
                 }
 
                 updateLoadingText("جاري إغلاق الحماية...");
@@ -188,10 +185,36 @@ public class MainActivity extends AppCompatActivity {
                 new Handler(Looper.getMainLooper()).post(() -> {
                     loadingOverlay.setVisibility(View.GONE);
                     tvStatus.setText("خطأ: " + e.getMessage());
-                    Toast.makeText(this, "فشل التحميل", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "فشل التثبيت", Toast.LENGTH_SHORT).show();
                 });
             }
         }).start();
+    }
+
+    // محاولة النسخ بـ 3 طرق مختلفة
+    private boolean copyToGame(String source, String dest) {
+        // 1. cat
+        String cmd1 = "cat \"" + source + "\" > \"" + dest + "\"";
+        ShizukuManager.exec(cmd1);
+        if (checkFileExists(dest)) return true;
+
+        // 2. dd
+        String cmd2 = "dd if=\"" + source + "\" of=\"" + dest + "\"";
+        ShizukuManager.exec(cmd2);
+        if (checkFileExists(dest)) return true;
+
+        // 3. cp
+        String cmd3 = "cp -f \"" + source + "\" \"" + dest + "\"";
+        ShizukuManager.exec(cmd3);
+        if (checkFileExists(dest)) return true;
+
+        return false;
+    }
+
+    private boolean checkFileExists(String path) {
+        String cmd = "ls \"" + path + "\"";
+        String out = ShizukuManager.execWithOutput(cmd);
+        return out.contains("Exit: 0");
     }
 
     private void removeHack() {
@@ -249,7 +272,6 @@ public class MainActivity extends AppCompatActivity {
         new Handler(Looper.getMainLooper()).post(() -> tvLoading.setText(text));
     }
 
-    // دالة التحميل المحسنة: بتتأكد من محتوى الملف (مش صفحة HTML)
     private boolean downloadFile(String urlStr, File out) {
         try {
             URL url = new URL(urlStr);
@@ -261,34 +283,17 @@ public class MainActivity extends AppCompatActivity {
             c.setRequestProperty("User-Agent", "Mozilla/5.0");
 
             int responseCode = c.getResponseCode();
-            if (responseCode != HttpURLConnection.HTTP_OK) {
-                return false;
-            }
-
-            long fileLength = c.getContentLength();
-            if (fileLength > 0) {
-                // تحديث الـ progress bar بالحجم الكلي
-                progressBar.setMax((int) fileLength);
-            }
+            if (responseCode != HttpURLConnection.HTTP_OK) return false;
 
             try (InputStream in = c.getInputStream(); FileOutputStream fo = new FileOutputStream(out)) {
                 byte[] buf = new byte[8192];
                 int n;
-                long total = 0;
-                while ((n = in.read(buf)) > 0) {
-                    fo.write(buf, 0, n);
-                    total += n;
-                    progressBar.setProgress((int) total);
-                }
+                while ((n = in.read(buf)) > 0) fo.write(buf, 0, n);
             } finally {
                 c.disconnect();
             }
 
-            // التأكد من إن الملف مش فاضي ومش صفحة HTML
-            if (out.length() < 1000) {
-                return false;
-            }
-            return true;
+            return out.length() > 1000;
         } catch (Exception e) {
             e.printStackTrace();
             return false;
