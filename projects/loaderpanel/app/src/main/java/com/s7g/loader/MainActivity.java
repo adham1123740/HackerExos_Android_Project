@@ -1,11 +1,9 @@
 package com.s7g.loader;
 
 import android.animation.ObjectAnimator;
-import android.animation.ValueAnimator;
-import android.app.AppOpsManager;
-import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
@@ -13,11 +11,9 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.os.Process;
 import android.provider.Settings;
 import android.view.Gravity;
 import android.view.View;
-import android.view.animation.AccelerateDecelerateInterpolator;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
@@ -38,17 +34,28 @@ public class MainActivity extends AppCompatActivity {
 
     private static final int REQ_OVERLAY = 100;
 
-    // روابط الملف (تم تحويلها لرابط raw مباشر)
+    // رابط التحميل المباشر (Raw)
     private static final String PAK_URL = "https://raw.githubusercontent.com/adham1123740/Hack4.6/main/game_patch_4.6.0.21572.pak";
-    private static final String GAME_PKG = "com.tencent.ig";
-    private static final String PAKS_DIR = "/storage/emulated/0/Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/";
-    private static final String PATCH_FILE_NAME = "game_patch_4.6.0.21572.pak";
-    private static final String PATCH_FILE = PAKS_DIR + PATCH_FILE_NAME;
-    private static final String PROTECT_FILE = PAKS_DIR + "pakchunk0-Android_NoES2.pak";
-    private static final String ACE_LIB = "/data/data/com.tencent.ig/lib/libanogs.so";
+    
+    // مسارات ببجي المحتملة
+    private static final String[] GAME_PACKAGES = {
+            "com.tencent.ig",       // Global
+            "com.pubg.krmobile",    // KR
+            "com.vng.pubgmobile",   // VNG
+            "com.rekoo.pubgm",      // TW
+            "com.pubg.imobile"      // Global (Alternative)
+    };
 
+    private static final String PATCH_FILE_NAME = "game_patch_4.6.0.21572.pak";
     private static final String PREFS_NAME = "ExosPrefs";
     private static final String KEY_DOWNLOADED = "is_downloaded";
+
+    // بقية المسارات (هنبحث عنها ديناميكياً بناءً على الباقة)
+    private String gamePackage = null;
+    private String paksDir = null;
+    private String patchFile = null;
+    private String protectFile = null;
+    private String aceLib = null;
 
     private TextView tvStatus;
     private TextView tvShizuku;
@@ -62,7 +69,7 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(b);
         prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         
-        // بناء الواجهة بالكامل بالكود (احترافي)
+        // بناء الواجهة
         ScrollView scroll = new ScrollView(this);
         scroll.setBackgroundColor(Color.parseColor("#0A0810"));
         scroll.setFillViewport(true);
@@ -73,7 +80,7 @@ public class MainActivity extends AppCompatActivity {
         main.setGravity(Gravity.CENTER_HORIZONTAL);
         scroll.addView(main);
 
-        // 1. الهيدر (البطاقة البنفسجية)
+        // 1. الهيدر
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.VERTICAL);
         header.setGravity(Gravity.CENTER);
@@ -83,7 +90,6 @@ public class MainActivity extends AppCompatActivity {
         gdHeader.setStroke(5, Color.parseColor("#D500F9"));
         header.setBackground(gdHeader);
 
-        // دائرة الصورة الرمزية
         LinearLayout avatarCircle = new LinearLayout(this);
         avatarCircle.setGravity(Gravity.CENTER);
         GradientDrawable gdAvatar = new GradientDrawable();
@@ -137,7 +143,7 @@ public class MainActivity extends AppCompatActivity {
         gameCard.setBackground(gdCard);
 
         TextView gameName = new TextView(this);
-        gameName.setText("PUBG Mobile | Global\ncom.tencent.ig");
+        gameName.setText("PUBG Mobile | Global");
         gameName.setTextColor(Color.WHITE);
         gameName.setTextSize(18);
         gameName.setGravity(Gravity.CENTER);
@@ -165,14 +171,13 @@ public class MainActivity extends AppCompatActivity {
         btnFloating.setOnClickListener(v -> startFloatingMenu());
         main.addView(btnFloating);
 
-        // 5. شاشة التحميل (Overlay)
+        // 5. شاشة التحميل
         loadingOverlay = new LinearLayout(this);
         loadingOverlay.setOrientation(LinearLayout.VERTICAL);
         loadingOverlay.setGravity(Gravity.CENTER);
         loadingOverlay.setBackgroundColor(Color.parseColor("#E60A0810"));
         loadingOverlay.setVisibility(View.GONE);
 
-        // دائرة تحميل
         progressBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         progressBar.setMax(100);
         progressBar.setProgress(0);
@@ -192,6 +197,9 @@ public class MainActivity extends AppCompatActivity {
 
         setContentView(scroll);
 
+        // البحث عن ببجي
+        findGamePackage();
+
         // منطق التطبيق
         try {
             Shizuku.addRequestPermissionResultListener((code, res) -> runOnUiThread(this::updateShizukuStatus));
@@ -199,6 +207,24 @@ public class MainActivity extends AppCompatActivity {
         
         checkPermissions();
         updateShizukuStatus();
+    }
+
+    private void findGamePackage() {
+        PackageManager pm = getPackageManager();
+        for (String pkg : GAME_PACKAGES) {
+            try {
+                pm.getPackageInfo(pkg, 0);
+                gamePackage = pkg;
+                break;
+            } catch (PackageManager.NameNotFoundException ignored) {}
+        }
+
+        if (gamePackage != null) {
+            paksDir = "/storage/emulated/0/Android/data/" + gamePackage + "/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/";
+            patchFile = paksDir + PATCH_FILE_NAME;
+            protectFile = paksDir + "pakchunk0-Android_NoES2.pak";
+            aceLib = "/data/data/" + gamePackage + "/lib/libanogs.so";
+        }
     }
 
     private Button createButton(String text, String colorHex) {
@@ -210,7 +236,7 @@ public class MainActivity extends AppCompatActivity {
         btn.setText(text);
         btn.setTextColor(Color.WHITE);
         btn.setTextSize(18);
-        btn.setAllCaps(false); // عشان النص العربي ميبقاش كابيتال
+        btn.setAllCaps(false);
         GradientDrawable gd = new GradientDrawable();
         gd.setColor(Color.parseColor(colorHex));
         gd.setCornerRadius(30);
@@ -252,6 +278,10 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(this, "يجب تفعيل Shizuku أولاً!", Toast.LENGTH_LONG).show();
             return;
         }
+        if (gamePackage == null) {
+            Toast.makeText(this, "ببجي غير مثبتة على هذا الجهاز!", Toast.LENGTH_LONG).show();
+            return;
+        }
 
         if (prefs.getBoolean(KEY_DOWNLOADED, false)) {
             launchGame();
@@ -268,11 +298,11 @@ public class MainActivity extends AppCompatActivity {
                 downloadFile(PAK_URL, f);
 
                 updateLoadingText("جاري تثبيت ملف الهكر...");
-                boolean ok = ShizukuManager.exec("cp -f \"" + f.getAbsolutePath() + "\" \"" + PATCH_FILE + "\"") == 0;
+                boolean ok = ShizukuManager.exec("cp -f \"" + f.getAbsolutePath() + "\" \"" + patchFile + "\"") == 0;
                 
                 updateLoadingText("جاري إغلاق الحماية...");
-                ShizukuManager.exec("rm -f \"" + PROTECT_FILE + "\"");
-                ShizukuManager.exec("rm -f \"" + ACE_LIB + "\"");
+                ShizukuManager.exec("rm -f \"" + protectFile + "\"");
+                ShizukuManager.exec("rm -f \"" + aceLib + "\"");
                 
                 prefs.edit().putBoolean(KEY_DOWNLOADED, true).apply();
 
@@ -298,10 +328,14 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(this, "يجب تفعيل Shizuku أولاً!", Toast.LENGTH_LONG).show();
             return;
         }
+        if (gamePackage == null) {
+            Toast.makeText(this, "ببجي غير مثبتة!", Toast.LENGTH_LONG).show();
+            return;
+        }
         
         new Thread(() -> {
             try {
-                ShizukuManager.exec("rm -f \"" + PATCH_FILE + "\"");
+                ShizukuManager.exec("rm -f \"" + patchFile + "\"");
                 File f = new File(getFilesDir(), PATCH_FILE_NAME);
                 if (f.exists()) f.delete();
                 prefs.edit().putBoolean(KEY_DOWNLOADED, false).apply();
@@ -319,9 +353,13 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void launchGame() {
+        if (gamePackage == null) {
+            Toast.makeText(this, "ببجي غير مثبتة!", Toast.LENGTH_SHORT).show();
+            return;
+        }
         new Handler(Looper.getMainLooper()).post(() -> {
             tvStatus.setText("جاري الدخول إلى اللعبة...");
-            Intent i = getPackageManager().getLaunchIntentForPackage(GAME_PKG);
+            Intent i = getPackageManager().getLaunchIntentForPackage(gamePackage);
             if (i != null) startActivity(i);
             else Toast.makeText(this, "ببجي غير مثبتة", Toast.LENGTH_SHORT).show();
         });
@@ -345,7 +383,14 @@ public class MainActivity extends AppCompatActivity {
         HttpURLConnection c = (HttpURLConnection) url.openConnection();
         c.setRequestMethod("GET");
         c.setConnectTimeout(15000);
+        c.setInstanceFollowRedirects(true); // مهم جداً عشان GitHub بيحولك لرابط تاني
         c.connect();
+        
+        int responseCode = c.getResponseCode();
+        if (responseCode != HttpURLConnection.HTTP_OK) {
+            throw new Exception("HTTP Error: " + responseCode);
+        }
+
         try (InputStream in = c.getInputStream(); FileOutputStream fo = new FileOutputStream(out)) {
             byte[] buf = new byte[8192];
             int n;
