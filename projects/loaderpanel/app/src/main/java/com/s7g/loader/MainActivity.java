@@ -5,19 +5,16 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
-import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
-import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
-import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
@@ -33,178 +30,55 @@ import rikka.shizuku.Shizuku;
 public class MainActivity extends AppCompatActivity {
 
     private static final int REQ_OVERLAY = 100;
-
-    // رابط التحميل المباشر (Raw)
     private static final String PAK_URL = "https://raw.githubusercontent.com/adham1123740/Hack4.6/main/game_patch_4.6.0.21572.pak";
-    
-    // مسارات ببجي المحتملة
-    private static final String[] GAME_PACKAGES = {
-            "com.tencent.ig",       // Global
-            "com.pubg.krmobile",    // KR
-            "com.vng.pubgmobile",   // VNG
-            "com.rekoo.pubgm",      // TW
-            "com.pubg.imobile"      // Global (Alternative)
-    };
-
     private static final String PATCH_FILE_NAME = "game_patch_4.6.0.21572.pak";
     private static final String PREFS_NAME = "ExosPrefs";
     private static final String KEY_DOWNLOADED = "is_downloaded";
 
-    // بقية المسارات (هنبحث عنها ديناميكياً بناءً على الباقة)
+    private static final String[] GAME_PACKAGES = {
+            "com.tencent.ig", "com.pubg.krmobile", "com.vng.pubgmobile", "com.rekoo.pubgm", "com.pubg.imobile"
+    };
+
     private String gamePackage = null;
     private String paksDir = null;
     private String patchFile = null;
     private String protectFile = null;
     private String aceLib = null;
 
-    private TextView tvStatus;
-    private TextView tvShizuku;
+    private TextView tvStatus, tvShizuku, tvLoading, tvPackageName;
     private LinearLayout loadingOverlay;
     private ProgressBar progressBar;
-    private TextView tvLoadingText;
     private SharedPreferences prefs;
 
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        setContentView(R.layout.activity_main);
         prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        
-        // بناء الواجهة
-        ScrollView scroll = new ScrollView(this);
-        scroll.setBackgroundColor(Color.parseColor("#0A0810"));
-        scroll.setFillViewport(true);
 
-        LinearLayout main = new LinearLayout(this);
-        main.setOrientation(LinearLayout.VERTICAL);
-        main.setPadding(60, 80, 60, 60);
-        main.setGravity(Gravity.CENTER_HORIZONTAL);
-        scroll.addView(main);
+        tvStatus = findViewById(R.id.tv_status);
+        tvShizuku = findViewById(R.id.tv_shizuku_status);
+        tvLoading = findViewById(R.id.tv_loading);
+        tvPackageName = findViewById(R.id.tv_package_name);
+        loadingOverlay = findViewById(R.id.loading_overlay);
+        progressBar = findViewById(R.id.progress_bar);
 
-        // 1. الهيدر
-        LinearLayout header = new LinearLayout(this);
-        header.setOrientation(LinearLayout.VERTICAL);
-        header.setGravity(Gravity.CENTER);
-        header.setPadding(40, 40, 40, 40);
-        GradientDrawable gdHeader = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{Color.parseColor("#B300B3"), Color.parseColor("#330033")});
-        gdHeader.setCornerRadius(60);
-        gdHeader.setStroke(5, Color.parseColor("#D500F9"));
-        header.setBackground(gdHeader);
+        Button btnStart = findViewById(R.id.btn_start);
+        Button btnDelete = findViewById(R.id.btn_delete_hack);
+        Button btnLaunch = findViewById(R.id.btn_launch);
+        Button btnFloating = findViewById(R.id.btn_floating);
 
-        LinearLayout avatarCircle = new LinearLayout(this);
-        avatarCircle.setGravity(Gravity.CENTER);
-        GradientDrawable gdAvatar = new GradientDrawable();
-        gdAvatar.setShape(GradientDrawable.OVAL);
-        gdAvatar.setColor(Color.parseColor("#1A0A1A"));
-        gdAvatar.setStroke(3, Color.parseColor("#00E5FF"));
-        avatarCircle.setBackground(gdAvatar);
-        LinearLayout.LayoutParams avatarParams = new LinearLayout.LayoutParams(150, 150);
-        avatarCircle.setLayoutParams(avatarParams);
-        TextView avatarText = new TextView(this);
-        avatarText.setText("EX");
-        avatarText.setTextColor(Color.parseColor("#00E5FF"));
-        avatarText.setTextSize(40);
-        avatarText.setGravity(Gravity.CENTER);
-        avatarCircle.addView(avatarText);
-        header.addView(avatarCircle);
-
-        TextView title = new TextView(this);
-        title.setText("PANEL EXOS\nDEVELOPER");
-        title.setTextColor(Color.parseColor("#00E5FF"));
-        title.setTextSize(24);
-        title.setGravity(Gravity.CENTER);
-        title.setPadding(0, 20, 0, 0);
-        header.addView(title);
-
-        TextView subTitle = new TextView(this);
-        subTitle.setText("@HackerExos");
-        subTitle.setTextColor(Color.parseColor("#B388FF"));
-        subTitle.setTextSize(14);
-        header.addView(subTitle);
-
-        main.addView(header);
-
-        // 2. حالة Shizuku
-        tvShizuku = new TextView(this);
-        tvShizuku.setText("Shizuku: جاري الفحص...");
-        tvShizuku.setTextColor(Color.parseColor("#FF5252"));
-        tvShizuku.setGravity(Gravity.CENTER);
-        tvShizuku.setTextSize(16);
-        tvShizuku.setPadding(0, 40, 0, 40);
-        main.addView(tvShizuku);
-
-        // 3. كارت اللعبة
-        LinearLayout gameCard = new LinearLayout(this);
-        gameCard.setOrientation(LinearLayout.VERTICAL);
-        gameCard.setPadding(40, 40, 40, 40);
-        GradientDrawable gdCard = new GradientDrawable();
-        gdCard.setColor(Color.parseColor("#0F0B1A"));
-        gdCard.setCornerRadius(40);
-        gdCard.setStroke(3, Color.parseColor("#D500F9"));
-        gameCard.setBackground(gdCard);
-
-        TextView gameName = new TextView(this);
-        gameName.setText("PUBG Mobile | Global");
-        gameName.setTextColor(Color.WHITE);
-        gameName.setTextSize(18);
-        gameName.setGravity(Gravity.CENTER);
-        gameCard.addView(gameName);
-
-        tvStatus = new TextView(this);
-        tvStatus.setText("جاهز للبدء");
-        tvStatus.setTextColor(Color.GRAY);
-        tvStatus.setTextSize(14);
-        tvStatus.setGravity(Gravity.CENTER);
-        tvStatus.setPadding(0, 20, 0, 20);
-        gameCard.addView(tvStatus);
-        main.addView(gameCard);
-
-        // 4. أزرار التحكم
-        Button btnStart = createButton("تشغيل الهاك | ENABLE", "#D500F9");
-        btnStart.setOnClickListener(v -> startHack());
-        main.addView(btnStart);
-
-        Button btnDelete = createButton("حذف الهاك | REMOVE", "#FF1744");
-        btnDelete.setOnClickListener(v -> removeHack());
-        main.addView(btnDelete);
-
-        Button btnFloating = createButton("القائمة العائمة | FLOATING", "#00E5FF");
-        btnFloating.setOnClickListener(v -> startFloatingMenu());
-        main.addView(btnFloating);
-
-        // 5. شاشة التحميل
-        loadingOverlay = new LinearLayout(this);
-        loadingOverlay.setOrientation(LinearLayout.VERTICAL);
-        loadingOverlay.setGravity(Gravity.CENTER);
-        loadingOverlay.setBackgroundColor(Color.parseColor("#E60A0810"));
-        loadingOverlay.setVisibility(View.GONE);
-
-        progressBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
-        progressBar.setMax(100);
-        progressBar.setProgress(0);
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(600, 30);
-        progressBar.setLayoutParams(params);
-        loadingOverlay.addView(progressBar);
-
-        tvLoadingText = new TextView(this);
-        tvLoadingText.setText("جاري التحميل...");
-        tvLoadingText.setTextColor(Color.WHITE);
-        tvLoadingText.setTextSize(20);
-        tvLoadingText.setPadding(0, 40, 0, 0);
-        loadingOverlay.addView(tvLoadingText);
-
-        addContentView(loadingOverlay, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT));
-
-        setContentView(scroll);
-
-        // البحث عن ببجي
         findGamePackage();
 
-        // منطق التطبيق
+        btnStart.setOnClickListener(v -> startHack());
+        btnDelete.setOnClickListener(v -> removeHack());
+        btnLaunch.setOnClickListener(v -> launchGame());
+        btnFloating.setOnClickListener(v -> startFloatingMenu());
+
         try {
             Shizuku.addRequestPermissionResultListener((code, res) -> runOnUiThread(this::updateShizukuStatus));
         } catch (Exception ignored) {}
-        
+
         checkPermissions();
         updateShizukuStatus();
     }
@@ -224,24 +98,10 @@ public class MainActivity extends AppCompatActivity {
             patchFile = paksDir + PATCH_FILE_NAME;
             protectFile = paksDir + "pakchunk0-Android_NoES2.pak";
             aceLib = "/data/data/" + gamePackage + "/lib/libanogs.so";
+            tvPackageName.setText(gamePackage);
+        } else {
+            tvPackageName.setText("غير مثبتة");
         }
-    }
-
-    private Button createButton(String text, String colorHex) {
-        Button btn = new Button(this);
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 150);
-        params.setMargins(0, 25, 0, 25);
-        btn.setLayoutParams(params);
-        btn.setText(text);
-        btn.setTextColor(Color.WHITE);
-        btn.setTextSize(18);
-        btn.setAllCaps(false);
-        GradientDrawable gd = new GradientDrawable();
-        gd.setColor(Color.parseColor(colorHex));
-        gd.setCornerRadius(30);
-        btn.setBackground(gd);
-        return btn;
     }
 
     private void updateShizukuStatus() {
@@ -279,7 +139,7 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         if (gamePackage == null) {
-            Toast.makeText(this, "ببجي غير مثبتة على هذا الجهاز!", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "ببجي غير مثبتة!", Toast.LENGTH_LONG).show();
             return;
         }
 
@@ -290,20 +150,20 @@ public class MainActivity extends AppCompatActivity {
 
         loadingOverlay.setVisibility(View.VISIBLE);
         ObjectAnimator.ofFloat(loadingOverlay, "alpha", 0f, 1f).setDuration(800).start();
-        
+
         new Thread(() -> {
             try {
                 updateLoadingText("جاري تحميل ملف الهكر...");
-                File f = new File(getFilesDir(), PATCH_FILE_NAME);
-                downloadFile(PAK_URL, f);
+                File localFile = new File(getFilesDir(), PATCH_FILE_NAME);
+                downloadFile(PAK_URL, localFile, progressBar);
 
                 updateLoadingText("جاري تثبيت ملف الهكر...");
-                boolean ok = ShizukuManager.exec("cp -f \"" + f.getAbsolutePath() + "\" \"" + patchFile + "\"") == 0;
-                
+                boolean ok = ShizukuManager.exec("cp -f \"" + localFile.getAbsolutePath() + "\" \"" + patchFile + "\"") == 0;
+
                 updateLoadingText("جاري إغلاق الحماية...");
                 ShizukuManager.exec("rm -f \"" + protectFile + "\"");
                 ShizukuManager.exec("rm -f \"" + aceLib + "\"");
-                
+
                 prefs.edit().putBoolean(KEY_DOWNLOADED, true).apply();
 
                 new Handler(Looper.getMainLooper()).post(() -> {
@@ -332,21 +192,21 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(this, "ببجي غير مثبتة!", Toast.LENGTH_LONG).show();
             return;
         }
-        
+
         new Thread(() -> {
             try {
                 ShizukuManager.exec("rm -f \"" + patchFile + "\"");
                 File f = new File(getFilesDir(), PATCH_FILE_NAME);
                 if (f.exists()) f.delete();
                 prefs.edit().putBoolean(KEY_DOWNLOADED, false).apply();
-                
+
                 new Handler(Looper.getMainLooper()).post(() -> {
                     tvStatus.setText("تم حذف الهاك بنجاح");
                     Toast.makeText(this, "تم الحذف", Toast.LENGTH_SHORT).show();
                 });
             } catch (Exception e) {
-                new Handler(Looper.getMainLooper()).post(() -> 
-                    Toast.makeText(this, "خطأ: " + e.getMessage(), Toast.LENGTH_SHORT).show()
+                new Handler(Looper.getMainLooper()).post(() ->
+                        Toast.makeText(this, "خطأ: " + e.getMessage(), Toast.LENGTH_SHORT).show()
                 );
             }
         }).start();
@@ -375,26 +235,30 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateLoadingText(String text) {
-        new Handler(Looper.getMainLooper()).post(() -> tvLoadingText.setText(text));
+        new Handler(Looper.getMainLooper()).post(() -> tvLoading.setText(text));
     }
 
-    private void downloadFile(String urlStr, File out) throws Exception {
+    private void downloadFile(String urlStr, File out, ProgressBar progress) throws Exception {
         URL url = new URL(urlStr);
         HttpURLConnection c = (HttpURLConnection) url.openConnection();
         c.setRequestMethod("GET");
+        c.setInstanceFollowRedirects(true);
         c.setConnectTimeout(15000);
-        c.setInstanceFollowRedirects(true); // مهم جداً عشان GitHub بيحولك لرابط تاني
         c.connect();
-        
-        int responseCode = c.getResponseCode();
-        if (responseCode != HttpURLConnection.HTTP_OK) {
-            throw new Exception("HTTP Error: " + responseCode);
-        }
 
+        int fileLength = c.getContentLength();
         try (InputStream in = c.getInputStream(); FileOutputStream fo = new FileOutputStream(out)) {
             byte[] buf = new byte[8192];
+            long total = 0;
             int n;
-            while ((n = in.read(buf)) > 0) fo.write(buf, 0, n);
+            while ((n = in.read(buf)) > 0) {
+                fo.write(buf, 0, n);
+                total += n;
+                if (fileLength > 0) {
+                    int progressPercent = (int) (total * 100 / fileLength);
+                    progress.setProgress(progressPercent);
+                }
+            }
         } finally { c.disconnect(); }
     }
 }
