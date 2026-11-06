@@ -11,7 +11,6 @@ public class ShizukuManager {
         } catch (Exception e) { return false; }
     }
 
-    // نسخة محسنة: بترجع الـ Output والـ Exit Code
     public static String execWithOutput(String cmd) {
         if (!isGranted()) return "ERROR: No Shizuku Permission";
         try {
