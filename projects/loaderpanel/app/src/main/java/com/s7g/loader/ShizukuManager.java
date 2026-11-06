@@ -11,6 +11,22 @@ public class ShizukuManager {
         } catch (Exception e) { return false; }
     }
 
+    // نسخة محسنة: بترجع الـ Output والـ Exit Code
+    public static String execWithOutput(String cmd) {
+        if (!isGranted()) return "ERROR: No Shizuku Permission";
+        try {
+            java.lang.reflect.Method method = Shizuku.class.getDeclaredMethod("newProcess", String[].class, String[].class, String.class);
+            method.setAccessible(true);
+            Object processObj = method.invoke(null, new String[]{"sh", "-c", cmd}, null, null);
+            ShizukuRemoteProcess process = (ShizukuRemoteProcess) processObj;
+            int exitCode = process.waitFor();
+            return "Exit: " + exitCode;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "Exception: " + e.getMessage();
+        }
+    }
+
     public static int exec(String cmd) {
         if (!isGranted()) return -1;
         try {
