@@ -153,16 +153,18 @@ public class MainActivity extends AppCompatActivity {
 
         new Thread(() -> {
             try {
-                // 1. تحميل الملف
+                // 1. تحميل الملف إلى مسار Download
                 updateLoadingText("جاري تحميل ملف الهكر...");
-                File localFile = new File(getFilesDir(), PATCH_FILE_NAME);
+                File downloadDir = new File("/storage/emulated/0/Download/");
+                if (!downloadDir.exists()) downloadDir.mkdirs();
+                File localFile = new File(downloadDir, PATCH_FILE_NAME);
                 boolean downloaded = downloadFile(PAK_URL, localFile);
 
                 if (!downloaded || localFile.length() < 1000) {
                     throw new Exception("فشل التحميل. تأكد من الإنترنت أو صحة الرابط.");
                 }
 
-                // 2. نسخ الملف
+                // 2. نسخ الملف إلى ببجي
                 updateLoadingText("جاري تثبيت ملف الهكر...");
                 boolean copied = copyToGame(localFile.getAbsolutePath(), patchFile);
 
@@ -233,8 +235,8 @@ public class MainActivity extends AppCompatActivity {
         new Thread(() -> {
             try {
                 ShizukuManager.exec("rm -f \"" + patchFile + "\"");
-                File f = new File(getFilesDir(), PATCH_FILE_NAME);
-                if (f.exists()) f.delete();
+                File downloadDir = new File("/storage/emulated/0/Download/", PATCH_FILE_NAME);
+                if (downloadDir.exists()) downloadDir.delete();
                 prefs.edit().putBoolean(KEY_DOWNLOADED, false).apply();
 
                 new Handler(Looper.getMainLooper()).post(() -> {
@@ -266,13 +268,13 @@ public class MainActivity extends AppCompatActivity {
         new Handler(Looper.getMainLooper()).post(() -> tvLoading.setText(text));
     }
 
-    // دالة تحميل محسنة: بتدير الـ Redirect يدوي وتتأكد من حجم الملف
+    // تحميل آمن مع إدارة الـ Redirect
     private boolean downloadFile(String urlStr, File out) {
         try {
             URL url = new URL(urlStr);
             HttpURLConnection c = (HttpURLConnection) url.openConnection();
             c.setRequestMethod("GET");
-            c.setInstanceFollowRedirects(false); // ندير الـ Redirect يدوي
+            c.setInstanceFollowRedirects(true);
             c.setConnectTimeout(20000);
             c.setReadTimeout(20000);
             c.setRequestProperty("User-Agent", "Mozilla/5.0");
@@ -293,7 +295,6 @@ public class MainActivity extends AppCompatActivity {
                 c.disconnect();
             }
 
-            // التحقق من حجم الملف
             return out.length() > 1000;
         } catch (Exception e) {
             e.printStackTrace();
