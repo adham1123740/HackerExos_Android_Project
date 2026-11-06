@@ -5,8 +5,6 @@ import rikka.shizuku.Shizuku;
 import rikka.shizuku.ShizukuRemoteProcess;
 
 public class ShizukuManager {
-    public static final int REQUEST_CODE = 1001;
-
     public static boolean isGranted() {
         try {
             return Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED;
