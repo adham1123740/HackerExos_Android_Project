@@ -30,6 +30,8 @@ import rikka.shizuku.Shizuku;
 public class MainActivity extends AppCompatActivity {
 
     private static final int REQ_OVERLAY = 100;
+    
+    // رابط مباشر
     private static final String PAK_URL = "https://raw.githubusercontent.com/adham1123740/Hack4.6/main/game_patch_4.6.0.21572.pak";
     private static final String PATCH_FILE_NAME = "game_patch_4.6.0.21572.pak";
     private static final String PREFS_NAME = "ExosPrefs";
@@ -66,14 +68,12 @@ public class MainActivity extends AppCompatActivity {
         Button btnStart = findViewById(R.id.btn_start);
         Button btnDelete = findViewById(R.id.btn_delete_hack);
         Button btnLaunch = findViewById(R.id.btn_launch);
-        Button btnFloating = findViewById(R.id.btn_floating);
 
         findGamePackage();
 
         btnStart.setOnClickListener(v -> startHack());
         btnDelete.setOnClickListener(v -> removeHack());
         btnLaunch.setOnClickListener(v -> launchGame());
-        btnFloating.setOnClickListener(v -> startFloatingMenu());
 
         try {
             Shizuku.addRequestPermissionResultListener((code, res) -> runOnUiThread(this::updateShizukuStatus));
@@ -153,21 +153,24 @@ public class MainActivity extends AppCompatActivity {
 
         new Thread(() -> {
             try {
+                // 1. تحميل الملف
                 updateLoadingText("جاري تحميل ملف الهكر...");
                 File localFile = new File(getFilesDir(), PATCH_FILE_NAME);
                 boolean downloaded = downloadFile(PAK_URL, localFile);
 
-                if (!downloaded) {
-                    throw new Exception("فشل التحميل. تأكد من اتصال الإنترنت.");
+                if (!downloaded || localFile.length() < 1000) {
+                    throw new Exception("فشل التحميل. تأكد من الإنترنت أو صحة الرابط.");
                 }
 
+                // 2. نسخ الملف
                 updateLoadingText("جاري تثبيت ملف الهكر...");
                 boolean copied = copyToGame(localFile.getAbsolutePath(), patchFile);
 
                 if (!copied) {
-                    throw new Exception("فشل نسخ الملف. تأكد من منح Shizuku الصلاحيات أو استخدام نسخة أحدث.");
+                    throw new Exception("فشل نسخ الملف. تأكد من منح Shizuku الصلاحيات.");
                 }
 
+                // 3. حذف الحماية
                 updateLoadingText("جاري إغلاق الحماية...");
                 ShizukuManager.exec("rm -f \"" + protectFile + "\"");
                 ShizukuManager.exec("rm -f \"" + aceLib + "\"");
@@ -191,7 +194,7 @@ public class MainActivity extends AppCompatActivity {
         }).start();
     }
 
-    // محاولة النسخ بـ 3 طرق مختلفة
+    // النسخ باستخدام cat + dd + cp
     private boolean copyToGame(String source, String dest) {
         // 1. cat
         String cmd1 = "cat \"" + source + "\" > \"" + dest + "\"";
@@ -259,31 +262,28 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    private void startFloatingMenu() {
-        if (Settings.canDrawOverlays(this)) {
-            startService(new Intent(this, FloatingService.class));
-            Toast.makeText(this, "تم تشغيل القائمة العائمة", Toast.LENGTH_SHORT).show();
-        } else {
-            Toast.makeText(this, "الرجاء إعطاء صلاحية النافذة العائمة", Toast.LENGTH_SHORT).show();
-        }
-    }
-
     private void updateLoadingText(String text) {
         new Handler(Looper.getMainLooper()).post(() -> tvLoading.setText(text));
     }
 
+    // دالة تحميل محسنة: بتدير الـ Redirect يدوي وتتأكد من حجم الملف
     private boolean downloadFile(String urlStr, File out) {
         try {
             URL url = new URL(urlStr);
             HttpURLConnection c = (HttpURLConnection) url.openConnection();
             c.setRequestMethod("GET");
-            c.setInstanceFollowRedirects(true);
+            c.setInstanceFollowRedirects(false); // ندير الـ Redirect يدوي
             c.setConnectTimeout(20000);
             c.setReadTimeout(20000);
             c.setRequestProperty("User-Agent", "Mozilla/5.0");
 
-            int responseCode = c.getResponseCode();
-            if (responseCode != HttpURLConnection.HTTP_OK) return false;
+            int code = c.getResponseCode();
+            if (code == HttpURLConnection.HTTP_MOVED_TEMP || code == HttpURLConnection.HTTP_MOVED_PERM) {
+                String newUrl = c.getHeaderField("Location");
+                c = (HttpURLConnection) new URL(newUrl).openConnection();
+                c.setRequestMethod("GET");
+                c.setRequestProperty("User-Agent", "Mozilla/5.0");
+            }
 
             try (InputStream in = c.getInputStream(); FileOutputStream fo = new FileOutputStream(out)) {
                 byte[] buf = new byte[8192];
@@ -293,6 +293,7 @@ public class MainActivity extends AppCompatActivity {
                 c.disconnect();
             }
 
+            // التحقق من حجم الملف
             return out.length() > 1000;
         } catch (Exception e) {
             e.printStackTrace();
